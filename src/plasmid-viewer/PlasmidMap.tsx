@@ -1,7 +1,7 @@
 import type { Feature } from "../types";
 import FeatureArc from "./FeatureArc";
 import FeatureLabel from "./FeatureLabel";
-import { buildLabelLayouts, computeDerivedFeatures, featureLength, polar, rgba, shouldDisplayLabel } from "./utils";
+import { buildLabelLayouts, computeDerivedFeatures, featureLength, polar, projectPosition, rgba, shouldDisplayLabel } from "./utils";
 import type { DerivedFeature } from "./utils";
 
 type PlasmidMapProps = {
@@ -12,9 +12,10 @@ type PlasmidMapProps = {
   visibleIds: Set<string>;
   selectedIds: Set<string>;
   hoveredId: string | null;
-  collapseMinorAnnotations: boolean;
   labelFontSize: number;
   labelSpacing: number;
+  originBase: number;
+  flipped: boolean;
   zoom: number;
   legendVisible: boolean;
   highlightedSpan?: { start: number; end: number } | null;
@@ -37,9 +38,10 @@ export default function PlasmidMap(props: PlasmidMapProps) {
     visibleIds,
     selectedIds,
     hoveredId,
-    collapseMinorAnnotations,
     labelFontSize,
     labelSpacing,
+    originBase,
+    flipped,
     zoom,
     legendVisible,
     highlightedSpan,
@@ -66,6 +68,8 @@ export default function PlasmidMap(props: PlasmidMapProps) {
     hoveredId,
     colorByType: false,
     focusSelection: false,
+    originBase,
+    flipped,
   });
   const backboneSpan =
     highlightMode === "backbone" && highlightedSpan
@@ -92,9 +96,9 @@ export default function PlasmidMap(props: PlasmidMapProps) {
     : derivedFeatures;
 
   const baseRadius = legendVisible ? 178 + zoom * 16 : 150 + zoom * 10;
-  const labelRadius = legendVisible ? 292 + zoom * 40 : 338 + zoom * 56;
+  const labelRadius = legendVisible ? 320 + zoom * 48 : 360 + zoom * 60;
   const labels = displayFeatures.filter((derived) =>
-    shouldDisplayLabel({ derived, collapseMinorAnnotations, selectedIds, hoveredId, plasmidLength }),
+    shouldDisplayLabel({ derived, selectedIds, hoveredId }),
   );
   const labelFeatures =
     selectedIds.size > 0
@@ -114,7 +118,7 @@ export default function PlasmidMap(props: PlasmidMapProps) {
     center: CENTER,
     outerRadius: baseRadius + 28,
     labelRadius,
-    minGap: (legendVisible ? 18 : 24) * labelSpacing,
+    minGap: (legendVisible ? 26 : 30) * labelSpacing,
     lineHeight: labelFontSize + 3,
   });
   const labelMap = new Map(labelLayouts.map((layout) => [layout.featureId, layout]));
@@ -135,7 +139,7 @@ export default function PlasmidMap(props: PlasmidMapProps) {
       <circle cx={CENTER} cy={CENTER} r={baseRadius + 12} className="pv-ring-base" />
       <circle cx={CENTER} cy={CENTER} r={baseRadius - 56} className="pv-ring-core" />
 
-      {highlightedSpan ? renderSpanHighlight({ center: CENTER, baseRadius, plasmidLength, highlightedSpan, highlightMode }) : null}
+      {highlightedSpan ? renderSpanHighlight({ center: CENTER, baseRadius, plasmidLength, highlightedSpan, highlightMode, originBase, flipped }) : null}
 
       {displayFeatures.map((derived) => (
         <FeatureArc
@@ -145,6 +149,8 @@ export default function PlasmidMap(props: PlasmidMapProps) {
           laneOffset={14}
           thickness={derived.state === "selected" ? 16 : 13}
           plasmidLength={plasmidLength}
+          originBase={originBase}
+          flipped={flipped}
           derived={derived}
           onMouseEnter={onFeatureEnter}
           onMouseMove={onFeatureMove}
@@ -219,8 +225,10 @@ function renderSpanHighlight(args: {
   plasmidLength: number;
   highlightedSpan: { start: number; end: number };
   highlightMode: "region" | "backbone";
+  originBase: number;
+  flipped: boolean;
 }) {
-  const { center, baseRadius, plasmidLength, highlightedSpan, highlightMode } = args;
+  const { center, baseRadius, plasmidLength, highlightedSpan, highlightMode, originBase, flipped } = args;
   const color = highlightMode === "region" ? "#ea580c" : "#0f766e";
   const radius = baseRadius - 26;
 
@@ -247,16 +255,18 @@ function renderSpanHighlight(args: {
     isFocused: false,
   };
 
-  const startAngle = (spanFeature.feature.start / Math.max(1, plasmidLength)) * Math.PI * 2 - Math.PI / 2;
+  const startAngle =
+    (projectPosition(spanFeature.feature.start, Math.max(1, plasmidLength), originBase, flipped) / Math.max(1, plasmidLength)) * Math.PI * 2 - Math.PI / 2;
   const span =
     spanFeature.feature.start <= spanFeature.feature.end
       ? spanFeature.feature.end - spanFeature.feature.start + 1
       : plasmidLength - spanFeature.feature.start + spanFeature.feature.end + 1;
-  const endAngle = ((spanFeature.feature.start + span) / Math.max(1, plasmidLength)) * Math.PI * 2 - Math.PI / 2;
+  const endAngle =
+    (projectPosition(spanFeature.feature.start + span, Math.max(1, plasmidLength), originBase, flipped) / Math.max(1, plasmidLength)) * Math.PI * 2 - Math.PI / 2;
   const startPoint = polar(center, center, radius, startAngle);
   const endPoint = polar(center, center, radius, endAngle);
   const largeArc = span / Math.max(1, plasmidLength) > 0.5 ? 1 : 0;
-  const path = `M ${startPoint.x} ${startPoint.y} A ${radius} ${radius} 0 ${largeArc} 1 ${endPoint.x} ${endPoint.y}`;
+  const path = `M ${startPoint.x} ${startPoint.y} A ${radius} ${radius} 0 ${largeArc} ${flipped ? 0 : 1} ${endPoint.x} ${endPoint.y}`;
 
   return (
     <>

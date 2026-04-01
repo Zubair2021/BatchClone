@@ -38,10 +38,11 @@ export default function PlasmidViewer(props: ViewerProps) {
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [tab, setTab] = useState<TabKey>("map");
-  const [collapseMinorAnnotations, setCollapseMinorAnnotations] = useState(false);
   const [labelFontSize, setLabelFontSize] = useState(11);
   const [labelSpacing, setLabelSpacing] = useState(1.1);
   const [zoom, setZoom] = useState(0.34);
+  const [originBase, setOriginBase] = useState(0);
+  const [flipped, setFlipped] = useState(false);
   const [legendVisible, setLegendVisible] = useState(true);
   const [hoveredFeatureId, setHoveredFeatureId] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<{ feature: Feature | null; x: number; y: number }>({ feature: null, x: 0, y: 0 });
@@ -55,6 +56,11 @@ export default function PlasmidViewer(props: ViewerProps) {
   useEffect(() => {
     setInternalVisibleIds(visibleFeatureIds ?? plasmid?.features.map((feature) => feature.id) ?? []);
   }, [plasmid, visibleFeatureIds]);
+
+  useEffect(() => {
+    setOriginBase(0);
+    setFlipped(false);
+  }, [plasmid?.id]);
 
   useEffect(() => {
     setZoom(legendVisible ? 0.34 : 0.18);
@@ -366,18 +372,6 @@ export default function PlasmidViewer(props: ViewerProps) {
             <div className="pv-map-frame">
               {tab === "map" ? (
                 <div className="pv-map-actions">
-                  <label className="pv-check compact">
-                    <input type="checkbox" checked={collapseMinorAnnotations} onChange={(event) => setCollapseMinorAnnotations(event.target.checked)} />
-                    Minor
-                  </label>
-                  <label className="pv-inline-range compact">
-                    Label size
-                    <input type="range" min="9" max="16" step="1" value={labelFontSize} onChange={(event) => setLabelFontSize(Number(event.target.value))} />
-                  </label>
-                  <label className="pv-inline-range compact">
-                    Label spacing
-                    <input type="range" min="0.8" max="2" step="0.1" value={labelSpacing} onChange={(event) => setLabelSpacing(Number(event.target.value))} />
-                  </label>
                   <button type="button" className="pv-ghost-button" onClick={() => void copyCurrentMap()}>
                     Copy
                   </button>
@@ -399,9 +393,10 @@ export default function PlasmidViewer(props: ViewerProps) {
                 visibleIds={visibleIds}
                 selectedIds={selectedIds}
                 hoveredId={hoveredFeatureId}
-                collapseMinorAnnotations={collapseMinorAnnotations}
                 labelFontSize={labelFontSize}
                 labelSpacing={labelSpacing}
+                originBase={originBase}
+                flipped={flipped}
                 zoom={zoom}
                 legendVisible={legendVisible}
                 highlightedSpan={highlightedSpan}
@@ -426,10 +421,34 @@ export default function PlasmidViewer(props: ViewerProps) {
                       : "Hover a feature or legend row to preview; click to select and sync both panels."}
                 </p>
               </div>
-              <label className="pv-inline-range">
-                Zoom
-                <input type="range" min="0.08" max="1.2" step="0.02" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
-              </label>
+              <div className="pv-footer-controls">
+                <label className="pv-inline-range compact">
+                  Zoom
+                  <input type="range" min="0.08" max="1.2" step="0.02" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+                </label>
+                <label className="pv-inline-range compact">
+                  Label size
+                  <input type="range" min="9" max="16" step="1" value={labelFontSize} onChange={(event) => setLabelFontSize(Number(event.target.value))} />
+                </label>
+                <label className="pv-inline-range compact">
+                  Label spacing
+                  <input type="range" min="0.8" max="2.4" step="0.1" value={labelSpacing} onChange={(event) => setLabelSpacing(Number(event.target.value))} />
+                </label>
+                <label className="pv-inline-control compact">
+                  Origin
+                  <input
+                    type="number"
+                    min={1}
+                    max={plasmidData.length}
+                    value={originBase + 1}
+                    onChange={(event) => setOriginBase(Math.max(0, Math.min(plasmidData.length - 1, Number(event.target.value || 1) - 1)))}
+                  />
+                </label>
+                <label className="pv-check compact">
+                  <input type="checkbox" checked={flipped} onChange={(event) => setFlipped(event.target.checked)} />
+                  Flip
+                </label>
+              </div>
             </div>
           </section>
 

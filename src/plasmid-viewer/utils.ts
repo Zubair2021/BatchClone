@@ -58,6 +58,15 @@ export function angleForPosition(position: number, length: number): number {
   return (position / Math.max(1, length)) * Math.PI * 2 - Math.PI / 2;
 }
 
+export function projectPosition(position: number, length: number, originBase: number, flipped: boolean): number {
+  if (length <= 0) return 0;
+  const normalized = ((position % length) + length) % length;
+  const origin = ((originBase % length) + length) % length;
+  return flipped
+    ? (origin - normalized + length) % length
+    : (normalized - origin + length) % length;
+}
+
 export function clampAngle(angle: number): number {
   let value = angle;
   while (value < -Math.PI / 2) value += Math.PI * 2;
@@ -154,8 +163,10 @@ export function computeDerivedFeatures(args: {
   hoveredId: string | null;
   colorByType: boolean;
   focusSelection: boolean;
+  originBase: number;
+  flipped: boolean;
 }): DerivedFeature[] {
-  const { plasmid, visibleIds, selectedIds, hoveredId, colorByType, focusSelection } = args;
+  const { plasmid, visibleIds, selectedIds, hoveredId, colorByType, focusSelection, originBase, flipped } = args;
   const visibleFeatures = plasmid.features.filter((feature) => visibleIds.has(feature.id));
 
   return visibleFeatures
@@ -172,9 +183,9 @@ export function computeDerivedFeatures(args: {
 
       return {
         feature,
-        startAngle: angleForPosition(feature.start, plasmid.length),
-        endAngle: angleForPosition((feature.start + span) % plasmid.length, plasmid.length),
-        midAngle: angleForPosition(mid, plasmid.length),
+        startAngle: angleForPosition(projectPosition(feature.start, plasmid.length, originBase, flipped), plasmid.length),
+        endAngle: angleForPosition(projectPosition((feature.start + span) % plasmid.length, plasmid.length, originBase, flipped), plasmid.length),
+        midAngle: angleForPosition(projectPosition(mid, plasmid.length, originBase, flipped), plasmid.length),
         span,
         lane: computeFeatureLane(feature, visibleFeatures, plasmid.length),
         color: resolveFeatureColor(feature, colorByType),
@@ -203,16 +214,11 @@ export function getStrandLabel(strand?: number): string {
 
 export function shouldDisplayLabel(args: {
   derived: DerivedFeature;
-  collapseMinorAnnotations: boolean;
   selectedIds: Set<string>;
   hoveredId: string | null;
-  plasmidLength: number;
 }): boolean {
-  const { derived, collapseMinorAnnotations, selectedIds, hoveredId, plasmidLength } = args;
+  const { derived, selectedIds, hoveredId } = args;
   if (selectedIds.has(derived.feature.id) || hoveredId === derived.feature.id) return true;
-  if (collapseMinorAnnotations) {
-    return derived.span >= plasmidLength * 0.012;
-  }
   return true;
 }
 
@@ -228,7 +234,7 @@ export function buildLabelLayouts(args: {
   const left: LabelLayout[] = [];
   const right: LabelLayout[] = [];
   const perSideCount = Math.max(1, Math.ceil(features.length / 2));
-  const dynamicGap = Math.max(minGap, Math.min(52, 24 + perSideCount * 1.2));
+  const dynamicGap = Math.max(minGap, Math.min(70, 26 + perSideCount * 1.5));
 
   for (const derived of features) {
     const anchor = polar(center, center, outerRadius + derived.lane * 14, clampAngle(derived.midAngle));
@@ -260,8 +266,8 @@ export function buildLabelLayouts(args: {
 
 function distributeLayouts(layouts: LabelLayout[], center: number, minGap: number, lineHeight: number): LabelLayout[] {
   const sorted = [...layouts].sort((a, b) => a.labelY - b.labelY);
-  const minY = center - 300;
-  const maxY = center + 300;
+  const minY = center - 332;
+  const maxY = center + 332;
 
   for (let index = 0; index < sorted.length; index += 1) {
     const previous = sorted[index - 1];

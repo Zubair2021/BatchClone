@@ -387,6 +387,14 @@ code {
   padding: 7px 11px;
 }
 
+.pv-inline-control input {
+  width: 88px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: #ffffff;
+  padding: 7px 11px;
+}
+
 .pv-check input {
   margin: 0;
 }
@@ -562,6 +570,13 @@ code {
   align-items: center;
   padding: 12px 4px 4px;
   flex-wrap: wrap;
+}
+
+.pv-footer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .pv-status-block {

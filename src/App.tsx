@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import PlasmidViewer from "./PlasmidViewer";
+import { denseMockPlasmid, sparseMockPlasmid } from "./plasmid-viewer/mockData";
 import {
   buildAssembledPlasmid,
   clampBase,
@@ -677,7 +678,11 @@ export default function App() {
       applyLoadedPlasmids([vectorPlasmid], "vector", "1 bundled vector example");
       applyLoadedPlasmids(donorPlasmids, "donor", `${donorPlasmids.length} bundled donor examples`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to load example files.");
+      const fallbackVector = cloneBundledMock(sparseMockPlasmid, "BatchClone example vector");
+      const fallbackDonor = cloneBundledMock(denseMockPlasmid, "BatchClone example donor");
+      applyLoadedPlasmids([fallbackVector], "vector", "fallback example vector");
+      applyLoadedPlasmids([fallbackDonor], "donor", "fallback example donor");
+      setStatus(error instanceof Error ? `${error.message} Loaded fallback in-app examples instead.` : "Loaded fallback in-app examples.");
     } finally {
       setLoading(false);
     }
@@ -1091,6 +1096,16 @@ export default function App() {
       ) : null}
     </div>
   );
+}
+
+function cloneBundledMock(plasmid: Plasmid, name: string): Plasmid {
+  return {
+    ...plasmid,
+    id: crypto.randomUUID(),
+    name,
+    fileName: `${name}.gb`,
+    features: plasmid.features.map((feature) => ({ ...feature, id: crypto.randomUUID() })),
+  };
 }
 
 function RulePanel(props: {

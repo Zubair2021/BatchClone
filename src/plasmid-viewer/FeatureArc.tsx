@@ -7,6 +7,8 @@ type FeatureArcProps = {
   laneOffset: number;
   thickness: number;
   plasmidLength: number;
+  originBase: number;
+  flipped: boolean;
   derived: DerivedFeature;
   onMouseEnter: (feature: Feature, event: React.MouseEvent<SVGGElement>) => void;
   onMouseMove: (feature: Feature, event: React.MouseEvent<SVGGElement>) => void;
@@ -15,14 +17,14 @@ type FeatureArcProps = {
 };
 
 export default function FeatureArc(props: FeatureArcProps) {
-  const { center, baseRadius, laneOffset, thickness, plasmidLength, derived, onMouseEnter, onMouseMove, onMouseLeave, onClick } = props;
+  const { center, baseRadius, laneOffset, thickness, plasmidLength, originBase, flipped, derived, onMouseEnter, onMouseMove, onMouseLeave, onClick } = props;
   const radius = baseRadius + derived.lane * laneOffset;
   const stroke = statefulColor(derived.color, derived.state);
   const glow = derived.state === "selected" ? rgba(derived.color, 0.24) : derived.state === "hovered" ? rgba(derived.color, 0.16) : "transparent";
   const arrow = buildArrowHead({
     center,
     radius,
-    angle: directionAngle(derived, plasmidLength),
+    angle: directionAngle(derived, plasmidLength, originBase, flipped),
     color: stroke,
     strand: derived.feature.strand,
     thickness,
@@ -36,9 +38,9 @@ export default function FeatureArc(props: FeatureArcProps) {
       onMouseLeave={onMouseLeave}
       onClick={(event) => onClick(derived.feature, event)}
     >
-      {derived.state !== "muted" ? <path d={describeArc(derived, center, radius, plasmidLength)} stroke={glow} strokeWidth={thickness + 8} fill="none" strokeLinecap="round" /> : null}
+      {derived.state !== "muted" ? <path d={describeArc(derived, center, radius, plasmidLength, flipped)} stroke={glow} strokeWidth={thickness + 8} fill="none" strokeLinecap="round" /> : null}
       <path
-        d={describeArc(derived, center, radius, plasmidLength)}
+        d={describeArc(derived, center, radius, plasmidLength, flipped)}
         stroke={stroke}
         strokeWidth={derived.state === "selected" ? thickness + 2 : derived.state === "hovered" ? thickness + 1 : thickness}
         fill="none"
@@ -49,36 +51,25 @@ export default function FeatureArc(props: FeatureArcProps) {
   );
 }
 
-function describeArc(derived: DerivedFeature, center: number, radius: number, plasmidLength: number): string {
+function describeArc(derived: DerivedFeature, center: number, radius: number, plasmidLength: number, flipped: boolean): string {
   const span = derived.span;
-  const start = derived.feature.start;
-  const endPosition = (start + span) % plasmidLength;
   const startPoint = polar(center, center, radius, derived.startAngle);
   const endPoint = polar(center, center, radius, derived.endAngle);
   const largeArc = span / Math.max(1, plasmidLength) > 0.5 ? 1 : 0;
-
-  if (derived.feature.start > derived.feature.end) {
-    const wrappedMid = polar(center, center, radius, Math.PI * 1.5);
-    return [
-      `M ${startPoint.x} ${startPoint.y}`,
-      `A ${radius} ${radius} 0 1 1 ${wrappedMid.x} ${wrappedMid.y}`,
-      `M ${polar(center, center, radius, -Math.PI / 2).x} ${polar(center, center, radius, -Math.PI / 2).y}`,
-      `A ${radius} ${radius} 0 0 1 ${endPoint.x} ${endPoint.y}`,
-    ].join(" ");
-  }
-
-  if (endPosition === start) {
-    return `M ${startPoint.x} ${startPoint.y} A ${radius} ${radius} 0 1 1 ${endPoint.x} ${endPoint.y}`;
-  }
-
-  return `M ${startPoint.x} ${startPoint.y} A ${radius} ${radius} 0 ${largeArc} 1 ${endPoint.x} ${endPoint.y}`;
+  return `M ${startPoint.x} ${startPoint.y} A ${radius} ${radius} 0 ${largeArc} ${flipped ? 0 : 1} ${endPoint.x} ${endPoint.y}`;
 }
 
-function directionAngle(derived: DerivedFeature, plasmidLength: number): number {
-  if (derived.feature.strand === -1) {
-    return ((derived.feature.start + Math.min(derived.span * 0.18, plasmidLength * 0.03)) / plasmidLength) * Math.PI * 2 - Math.PI / 2;
-  }
-  return ((derived.feature.start + derived.span - Math.min(derived.span * 0.18, plasmidLength * 0.03)) / plasmidLength) * Math.PI * 2 - Math.PI / 2;
+function directionAngle(derived: DerivedFeature, plasmidLength: number, originBase: number, flipped: boolean): number {
+  const offset = Math.min(derived.span * 0.18, plasmidLength * 0.03);
+  const position =
+    derived.feature.strand === -1
+      ? derived.feature.start + offset
+      : derived.feature.start + derived.span - offset;
+  const normalized = ((position % plasmidLength) + plasmidLength) % plasmidLength;
+  const projected = flipped
+    ? (originBase - normalized + plasmidLength) % plasmidLength
+    : (normalized - originBase + plasmidLength) % plasmidLength;
+  return (projected / plasmidLength) * Math.PI * 2 - Math.PI / 2;
 }
 
 function buildArrowHead(args: {
