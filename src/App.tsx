@@ -96,6 +96,10 @@ type LibraryKind = "vector" | "donor";
 const DEFAULT_INCLUSION: BoundaryInclusion = "include-both";
 const BATCH_DETAIL_STORAGE_KEY = "gibson-assembly-batch-detail";
 
+function debugLog(event: string, detail?: unknown) {
+  console.debug(`[BatchClone] ${event}`, detail ?? "");
+}
+
 function plasmidSignature(plasmid: Plasmid) {
   return `${plasmid.fileName}::${plasmid.name}::${plasmid.length}::${plasmid.sequence}`;
 }
@@ -597,11 +601,14 @@ export default function App() {
   async function handleFiles(event: React.ChangeEvent<HTMLInputElement>, library: LibraryKind) {
     const files = Array.from(event.target.files ?? []);
     if (!files.length) return;
+    debugLog("handleFiles:start", { library, files: files.map((file) => ({ name: file.name, size: file.size, type: file.type })) });
     setLoading(true);
     try {
       const parsed = await Promise.all(files.map((file) => parsePlasmidFile(file)));
+      debugLog("handleFiles:parsed", { library, parsed: parsed.map((plasmid) => ({ name: plasmid.name, length: plasmid.length, features: plasmid.features.length })) });
       applyLoadedPlasmids(parsed, library, `${files.length} ${library} file${files.length > 1 ? "s" : ""}`);
     } catch (error) {
+      debugLog("handleFiles:error", error);
       setStatus(error instanceof Error ? error.message : "Failed to load files.");
     } finally {
       setLoading(false);
@@ -610,6 +617,7 @@ export default function App() {
   }
 
   function applyLoadedPlasmids(parsed: Plasmid[], library: LibraryKind, sourceLabel: string) {
+    debugLog("applyLoadedPlasmids:start", { library, sourceLabel, count: parsed.length });
     const existingSignatures = new Set(plasmids.map(plasmidSignature));
     const seenParsed = new Set<string>();
     const uniqueParsed = parsed.filter((plasmid) => {
@@ -619,6 +627,7 @@ export default function App() {
       return true;
     });
     if (!uniqueParsed.length) {
+      debugLog("applyLoadedPlasmids:skipped-duplicates", { library, sourceLabel });
       setStatus(`Skipped ${sourceLabel}: those plasmids are already loaded.`);
       return;
     }
@@ -647,6 +656,7 @@ export default function App() {
       }
     }
     setBatchDonorIds((current) => [...new Set([...current, ...uniqueParsed.filter(() => library === "donor").map((plasmid) => plasmid.id)])]);
+    debugLog("applyLoadedPlasmids:complete", { library, loaded: uniqueParsed.map((plasmid) => plasmid.name) });
     setStatus(`Loaded ${uniqueParsed.length} new ${library} file${uniqueParsed.length === 1 ? "" : "s"} from ${sourceLabel}. Use the legends on the right of each map to define extraction rules.`);
   }
 
@@ -662,6 +672,7 @@ export default function App() {
 
   async function handleLoadExampleSet() {
     setLoading(true);
+    debugLog("handleLoadExampleSet:start");
     try {
       const response = await fetch(resolvePublicAssetPath("examples/manifest.json"));
       if (!response.ok) {
@@ -678,6 +689,7 @@ export default function App() {
       applyLoadedPlasmids([vectorPlasmid], "vector", "1 bundled vector example");
       applyLoadedPlasmids(donorPlasmids, "donor", `${donorPlasmids.length} bundled donor examples`);
     } catch (error) {
+      debugLog("handleLoadExampleSet:error", error);
       const fallbackVector = cloneBundledMock(sparseMockPlasmid, "BatchClone example vector");
       const fallbackDonor = cloneBundledMock(denseMockPlasmid, "BatchClone example donor");
       applyLoadedPlasmids([fallbackVector], "vector", "fallback example vector");

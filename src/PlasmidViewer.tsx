@@ -21,6 +21,10 @@ type ViewerProps = {
 
 type TabKey = "map" | "sequence";
 
+function viewerDebug(event: string, detail?: unknown) {
+  console.debug(`[BatchClone:Viewer] ${event}`, detail ?? "");
+}
+
 export default function PlasmidViewer(props: ViewerProps) {
   const {
     plasmid,
@@ -61,6 +65,10 @@ export default function PlasmidViewer(props: ViewerProps) {
     setOriginBase(0);
     setFlipped(false);
   }, [plasmid?.id]);
+
+  useEffect(() => {
+    viewerDebug("plasmid-activated", plasmid ? { id: plasmid.id, name: plasmid.name, length: plasmid.length, features: plasmid.features.length } : { plasmid: null });
+  }, [plasmid]);
 
   useEffect(() => {
     setZoom(legendVisible ? 0.34 : 0.18);
