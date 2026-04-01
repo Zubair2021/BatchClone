@@ -787,14 +787,28 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="hero">
-        <div>
-          <p className="eyebrow">Plasmid Designer</p>
-          <h1>Rule-based vector and insert extraction</h1>
+        <div className="hero-content">
+          <p className="eyebrow">BatchClone</p>
+          <h1>Design Primers for Batch Cloning</h1>
           <p className="hero-copy">
-            Features are selected from a right-side legend now. The map is only for visual confirmation:
-            clicked legend items darken on the map. Both vector and donor support extracting either a named
-            feature or the region between two features, with include/exclude flank options.
+            Build assembly-ready primer sets from annotated vectors and donor constructs with a workflow tuned
+            for repeated cloning jobs. Define junction rules once, inspect the map visually, and export batch
+            results with matched features, diagnostics, and assembled plasmid previews.
           </p>
+          <div className="hero-metrics" aria-label="Project summary">
+            <div className="hero-metric">
+              <span className="hero-metric-label">Vectors loaded</span>
+              <strong>{vectorSources.length}</strong>
+            </div>
+            <div className="hero-metric">
+              <span className="hero-metric-label">Donors loaded</span>
+              <strong>{donorSources.length}</strong>
+            </div>
+            <div className="hero-metric">
+              <span className="hero-metric-label">Assembly modes</span>
+              <strong>Gibson + In-Fusion</strong>
+            </div>
+          </div>
         </div>
         <div className="hero-actions">
           <div className="upload-stack">
