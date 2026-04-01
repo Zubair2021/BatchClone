@@ -1,0 +1,48 @@
+{
+  "vector": {
+    "path": "examples/vector-plasmid.dna",
+    "name": "vector-plasmid.dna"
+  },
+  "donors": [
+    {
+      "path": "examples/sample_files/VLHCXP_1_sample_1.dna",
+      "name": "VLHCXP_1_sample_1.dna"
+    },
+    {
+      "path": "examples/sample_files/VLHCXP_2_sample_2.dna",
+      "name": "VLHCXP_2_sample_2.dna"
+    },
+    {
+      "path": "examples/sample_files/VLHCXP_3_sample_3.dna",
+      "name": "VLHCXP_3_sample_3.dna"
+    },
+    {
+      "path": "examples/sample_files/VLHCXP_4_sample_4.dna",
+      "name": "VLHCXP_4_sample_4.dna"
+    },
+    {
+      "path": "examples/sample_files/VLHCXP_5_sample_5.dna",
+      "name": "VLHCXP_5_sample_5.dna"
+    },
+    {
+      "path": "examples/sample_files/VLHCXP_6_sample_6.dna",
+      "name": "VLHCXP_6_sample_6.dna"
+    },
+    {
+      "path": "examples/sample_files/VLHCXP_7_sample_7.dna",
+      "name": "VLHCXP_7_sample_7.dna"
+    },
+    {
+      "path": "examples/sample_files/VLHCXP_8_sample_8.dna",
+      "name": "VLHCXP_8_sample_8.dna"
+    },
+    {
+      "path": "examples/sample_files/VLHCXP_9_sample_9.dna",
+      "name": "VLHCXP_9_sample_9.dna"
+    },
+    {
+      "path": "examples/sample_files/VLHCXP_10_sample_10.dna",
+      "name": "VLHCXP_10_sample_10.dna"
+    }
+  ]
+}
