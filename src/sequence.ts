@@ -45,29 +45,32 @@ type ParserResult = {
 };
 
 export async function parsePlasmidFile(file: File): Promise<Plasmid> {
-  const parsed = (await anyToJson(file, { fileName: file.name })) as ParserResult[];
+  const rawText = await file.text();
+  const parsedResult = (await anyToJson(file, { fileName: file.name })) as ParserResult[] | ParserResult;
+  const parsed = Array.isArray(parsedResult) ? parsedResult : [parsedResult];
   const firstSuccess = parsed.find((entry) => entry.success && entry.parsedSequence);
-  const rawSequence = firstSuccess?.parsedSequence?.sequence ?? "";
-  if (!rawSequence) {
+  const parserSequence = firstSuccess?.parsedSequence?.sequence ?? "";
+  const fallbackSequence = sanitizeSequence(rawText);
+  const sequence = sanitizeSequence(parserSequence) || fallbackSequence;
+  if (!sequence) {
     const messages = parsed.flatMap((entry) => entry.messages ?? []);
     throw new Error(messages[0] ?? `Unable to parse ${file.name}`);
   }
 
-  const raw = firstSuccess!.parsedSequence!;
-  const sequence = sanitizeSequence(rawSequence);
-  const features = (raw.features ?? [])
-    .filter((feature) => Number.isInteger(feature.start) && Number.isInteger(feature.end))
-    .map((feature, index) => normalizeFeature(feature, index));
+  const raw = firstSuccess?.parsedSequence;
+  const features = (raw?.features ?? [])
+    .map((feature, index) => normalizeFeature(feature, index, sequence.length))
+    .filter((feature): feature is Feature => feature !== null);
 
   return {
     id: crypto.randomUUID(),
-    name: raw.name?.trim() || file.name.replace(/\.[^.]+$/, ""),
+    name: raw?.name?.trim() || file.name.replace(/\.[^.]+$/, ""),
     fileName: file.name,
     length: sequence.length,
     sequence,
-    topology: raw.circular === false ? "linear" : "circular",
+    topology: raw?.circular === false ? "linear" : "circular",
     strandedness: "ds",
-    description: raw.description,
+    description: raw?.description,
     features,
   };
 }
@@ -80,16 +83,28 @@ type ParsedFeature = {
   strand?: number;
 };
 
-function normalizeFeature(feature: ParsedFeature, index: number): Feature {
+function normalizeFeature(feature: ParsedFeature, index: number, sequenceLength: number): Feature | null {
+  if (!Number.isFinite(feature.start) || !Number.isFinite(feature.end) || sequenceLength <= 0) {
+    return null;
+  }
+
+  const start = normalizeCoordinate(feature.start ?? 0, sequenceLength);
+  const end = normalizeCoordinate(feature.end ?? 0, sequenceLength);
   return {
     id: crypto.randomUUID(),
     name: feature.name?.trim() || `Feature ${index + 1}`,
     type: feature.type?.trim() || "misc_feature",
-    start: Math.max(0, feature.start ?? 0),
-    end: Math.max(0, feature.end ?? 0),
+    start,
+    end,
     strand: feature.strand,
     color: FEATURE_COLORS[index % FEATURE_COLORS.length],
   };
+}
+
+function normalizeCoordinate(value: number, sequenceLength: number): number {
+  const rounded = Math.round(value);
+  if (rounded >= 1 && rounded <= sequenceLength) return rounded - 1;
+  return ((rounded % sequenceLength) + sequenceLength) % sequenceLength;
 }
 
 export function sanitizeSequence(sequence: string): string {
