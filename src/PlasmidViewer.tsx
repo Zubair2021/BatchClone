@@ -80,23 +80,19 @@ export default function PlasmidViewer(props: ViewerProps) {
       ),
     [activePlasmid, visibleArray],
   );
-  const hoveredFeature = activePlasmid?.features.find((feature) => feature.id === hoveredFeatureId) ?? null;
-
-  if (!activePlasmid) {
-    return <div className="empty-map">Load a sequence to view it.</div>;
-  }
-
   const plasmidData = activePlasmid;
-  const mapFeatures = plasmidData.features.filter((feature) => visibleIds.has(feature.id));
-  const sequenceValue = activeSequenceText ?? plasmidData.sequence;
+  const plasmidLengthValue = plasmidData?.length ?? 0;
+  const hoveredFeature = plasmidData?.features.find((feature) => feature.id === hoveredFeatureId) ?? null;
+  const mapFeatures = plasmidData?.features.filter((feature) => visibleIds.has(feature.id)) ?? [];
+  const sequenceValue = activeSequenceText ?? plasmidData?.sequence ?? "";
   const displayedRegion = useMemo(() => {
-    if (!sequenceValue.length || sequenceValue.length >= plasmidData.length) {
+    if (!plasmidData || !sequenceValue.length || sequenceValue.length >= plasmidLengthValue) {
       return { start: 0, length: sequenceValue.length };
     }
     if (!highlightedSpan) return { start: 0, length: sequenceValue.length };
     if (highlightMode === "backbone") {
       return {
-        start: (highlightedSpan.end + 1) % plasmidData.length,
+        start: (highlightedSpan.end + 1) % plasmidLengthValue,
         length: sequenceValue.length,
       };
     }
@@ -104,19 +100,24 @@ export default function PlasmidViewer(props: ViewerProps) {
       start: highlightedSpan.start,
       length: sequenceValue.length,
     };
-  }, [highlightMode, highlightedSpan, plasmidData.length, sequenceValue.length]);
+  }, [highlightMode, highlightedSpan, plasmidLengthValue, sequenceValue.length]);
   const sequenceRows = useMemo(
     () =>
       buildSequenceRows({
         sequence: sequenceValue,
-        plasmidLength: plasmidData.length,
+        plasmidLength: plasmidLengthValue,
         features: mapFeatures,
         selectedIds,
         hoveredId: hoveredFeatureId,
         start: displayedRegion.start,
       }),
-    [displayedRegion.start, hoveredFeatureId, mapFeatures, plasmidData.length, selectedIds, sequenceValue],
+    [displayedRegion.start, hoveredFeatureId, mapFeatures, plasmidLengthValue, selectedIds, sequenceValue],
   );
+
+  if (!plasmidData) {
+    return <div className="empty-map">Load a sequence to view it.</div>;
+  }
+  const loadedPlasmid = plasmidData;
 
   function updateTooltip(feature: Feature | null, clientX?: number, clientY?: number) {
     if (!feature || clientX == null || clientY == null) {
@@ -169,7 +170,7 @@ export default function PlasmidViewer(props: ViewerProps) {
   }
 
   function handleSetVisible(mode: "all" | "none") {
-    handleVisibleChange(mode === "all" ? plasmidData.features.map((feature) => feature.id) : []);
+    handleVisibleChange(mode === "all" ? loadedPlasmid.features.map((feature) => feature.id) : []);
   }
 
   function serializeCurrentMap(): string | null {
@@ -194,7 +195,7 @@ export default function PlasmidViewer(props: ViewerProps) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${sanitizeFileName(plasmidData.name)}-map.svg`;
+    link.download = `${sanitizeFileName(loadedPlasmid.name)}-map.svg`;
     link.click();
     URL.revokeObjectURL(url);
   }
