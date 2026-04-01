@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import PlasmidViewer from "./PlasmidViewer";
-import { denseMockPlasmid, sparseMockPlasmid } from "./plasmid-viewer/mockData";
+import { demoDonorPlasmids, demoVectorPlasmids } from "./plasmid-viewer/mockData";
 import {
   buildAssembledPlasmid,
   clampBase,
@@ -42,25 +42,6 @@ type BatchDetailSnapshot = {
   assembledPlasmid: Plasmid;
   primers: SeamlessAssemblyPrimers;
 };
-
-type ExampleManifest = {
-  vector?: {
-    path: string;
-    name?: string;
-  };
-  donors?: Array<{
-    path: string;
-    name?: string;
-  }>;
-};
-
-function resolvePublicAssetPath(path: string): string {
-  const base = import.meta.env.BASE_URL.endsWith("/")
-    ? import.meta.env.BASE_URL
-    : `${import.meta.env.BASE_URL}/`;
-  const relativePath = path.replace(/^\/+/, "");
-  return `${base}${relativePath}`;
-}
 
 type BatchRow = {
   donorId: string;
@@ -660,6 +641,17 @@ export default function App() {
       if (firstDonor) {
         setInsertPlasmidId(firstDonor.id);
         setInsertVisibleIds(firstDonor.features.map((feature) => feature.id));
+        const t7 = findFeature(firstDonor.features, /\bt7\b/i);
+        const hdv = findFeature(firstDonor.features, /\bhdv\b|ribozyme/i);
+        if (t7 && hdv) {
+          setInsertRule({
+            mode: "between",
+            leftFeatureId: t7.id,
+            rightFeatureId: hdv.id,
+            inclusion: DEFAULT_INCLUSION,
+          });
+          setInsertRuleMode("between");
+        }
       }
     }
     setBatchDonorIds((current) => [...new Set([...current, ...uniqueParsed.filter(() => library === "donor").map((plasmid) => plasmid.id)])]);
@@ -667,41 +659,16 @@ export default function App() {
     setStatus(`Loaded ${uniqueParsed.length} new ${library} file${uniqueParsed.length === 1 ? "" : "s"} from ${sourceLabel}. Use the legends on the right of each map to define extraction rules.`);
   }
 
-  async function fetchExampleFile(entry: { path: string; name?: string }): Promise<File> {
-    const response = await fetch(resolvePublicAssetPath(entry.path));
-    if (!response.ok) {
-      throw new Error(`Could not fetch example file at ${entry.path}`);
-    }
-    const blob = await response.blob();
-    const name = entry.name || entry.path.split("/").pop() || "example.gb";
-    return new File([blob], name, { type: blob.type || "application/octet-stream" });
-  }
-
   async function handleLoadExampleSet() {
     setLoading(true);
     debugLog("handleLoadExampleSet:start");
     try {
-      const response = await fetch(resolvePublicAssetPath("examples/manifest.json"));
-      if (!response.ok) {
-        throw new Error("No bundled example manifest found. Add files under public/examples first.");
-      }
-      const manifest = (await response.json()) as ExampleManifest;
-      if (!manifest.vector || !manifest.donors?.length) {
-        throw new Error("Example manifest is missing a vector file or donor sample files.");
-      }
-      const vectorFile = await fetchExampleFile(manifest.vector);
-      const donorFiles = await Promise.all(manifest.donors.map((entry) => fetchExampleFile(entry)));
-      const vectorPlasmid = await parsePlasmidFile(vectorFile);
-      const donorPlasmids = await Promise.all(donorFiles.map((file) => parsePlasmidFile(file)));
-      applyLoadedPlasmids([vectorPlasmid], "vector", "1 bundled vector example");
-      applyLoadedPlasmids(donorPlasmids, "donor", `${donorPlasmids.length} bundled donor examples`);
+      const { vectors, donors } = cloneDemoSet();
+      applyLoadedPlasmids(vectors, "vector", `${vectors.length} bundled demo vectors`);
+      applyLoadedPlasmids(donors, "donor", `${donors.length} bundled demo donors`);
     } catch (error) {
       debugLog("handleLoadExampleSet:error", error);
-      const fallbackVector = cloneBundledMock(sparseMockPlasmid, "BatchClone example vector");
-      const fallbackDonor = cloneBundledMock(denseMockPlasmid, "BatchClone example donor");
-      applyLoadedPlasmids([fallbackVector], "vector", "fallback example vector");
-      applyLoadedPlasmids([fallbackDonor], "donor", "fallback example donor");
-      setStatus(error instanceof Error ? `${error.message} Loaded fallback in-app examples instead.` : "Loaded fallback in-app examples.");
+      setStatus(error instanceof Error ? error.message : "Could not load the bundled demo set.");
     } finally {
       setLoading(false);
     }
@@ -1148,6 +1115,13 @@ function cloneBundledMock(plasmid: Plasmid, name: string): Plasmid {
     name,
     fileName: `${name}.gb`,
     features: plasmid.features.map((feature) => ({ ...feature, id: crypto.randomUUID() })),
+  };
+}
+
+function cloneDemoSet() {
+  return {
+    vectors: demoVectorPlasmids.map((plasmid) => cloneBundledMock(plasmid, plasmid.name)),
+    donors: demoDonorPlasmids.map((plasmid) => cloneBundledMock(plasmid, plasmid.name)),
   };
 }
 
