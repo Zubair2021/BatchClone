@@ -1335,6 +1335,10 @@ code {
   width: min(1320px, 100%);
 }
 
+.modal-shell.diagnostics {
+  width: min(1120px, 100%);
+}
+
 .empty-state,
 .empty-map {
   padding: 18px;
@@ -1456,8 +1460,8 @@ code {
     260px 80px 90px
     260px 80px 90px
     220px
-    140px 140px;
-  min-width: 2940px;
+    140px 140px 140px;
+  min-width: 3090px;
   gap: 10px;
   align-items: center;
   padding: 10px 12px;

@@ -163,6 +163,7 @@ export default function App() {
       return null;
     }
   });
+  const [selectedBatchView, setSelectedBatchView] = useState<"diagnostics" | "assembly" | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("Load vector and donor files to begin.");
 
@@ -811,9 +812,10 @@ export default function App() {
     downloadFile("batch-assembly-primers-snapgene.csv", lines.join("\n"), "text/csv");
   }
 
-  function openBatchDetail(detail: BatchDetailSnapshot | null) {
+  function openBatchDetail(detail: BatchDetailSnapshot | null, view: "diagnostics" | "assembly") {
     if (!detail) return;
     setSelectedBatchDetail(detail);
+    setSelectedBatchView(view);
   }
 
   function openBatchDetailInNewTab(detail: BatchDetailSnapshot | null) {
@@ -1099,10 +1101,22 @@ export default function App() {
           />
         ) : null}
       </section>
-      {selectedBatchDetail ? (
-        <BatchDetailModal
+      {selectedBatchDetail && selectedBatchView === "diagnostics" ? (
+        <BatchDiagnosticsModal
           detail={selectedBatchDetail}
-          onClose={() => setSelectedBatchDetail(null)}
+          onClose={() => {
+            setSelectedBatchDetail(null);
+            setSelectedBatchView(null);
+          }}
+        />
+      ) : null}
+      {selectedBatchDetail && selectedBatchView === "assembly" ? (
+        <BatchAssemblyModal
+          detail={selectedBatchDetail}
+          onClose={() => {
+            setSelectedBatchDetail(null);
+            setSelectedBatchView(null);
+          }}
           onOpenNewTab={() => openBatchDetailInNewTab(selectedBatchDetail)}
         />
       ) : null}
@@ -1499,7 +1513,7 @@ function BatchPanel(props: {
   batchDonorIds: string[];
   setBatchDonorIds: React.Dispatch<React.SetStateAction<string[]>>;
   exportBatchCsv: () => void;
-  onOpenDetail: (detail: BatchDetailSnapshot | null) => void;
+  onOpenDetail: (detail: BatchDetailSnapshot | null, view: "diagnostics" | "assembly") => void;
 }) {
   const {
     batchRows,
@@ -1627,6 +1641,7 @@ function BatchPanel(props: {
           <span>Insert R Tm</span>
           <span>Insert pair issues</span>
           <span>Diagnostics</span>
+          <span>Assembled plasmid</span>
           <span>Status</span>
         </div>
         {batchRows.map((row) => (
@@ -1656,10 +1671,20 @@ function BatchPanel(props: {
               <button
                 type="button"
                 className="secondary-button batch-diagnostics-button"
-                onClick={() => row.detail && onOpenDetail(row.detail)}
+                onClick={() => row.detail && onOpenDetail(row.detail, "diagnostics")}
                 disabled={!row.detail}
               >
                 View diagnostics
+              </button>
+            </span>
+            <span>
+              <button
+                type="button"
+                className="secondary-button batch-diagnostics-button"
+                onClick={() => row.detail && onOpenDetail(row.detail, "assembly")}
+                disabled={!row.detail}
+              >
+                View plasmid
               </button>
             </span>
             <span title={`${row.vectorDiagnosticSummary}. ${row.insertDiagnosticSummary}`}>{row.status}</span>
@@ -1671,7 +1696,62 @@ function BatchPanel(props: {
   );
 }
 
-function BatchDetailModal(props: {
+function BatchDiagnosticsModal(props: {
+  detail: BatchDetailSnapshot;
+  onClose: () => void;
+}) {
+  const { detail, onClose } = props;
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="modal-shell diagnostics" onClick={(event) => event.stopPropagation()}>
+        <div className="panel-header">
+          <div>
+            <h2>{detail.donorName} diagnostics</h2>
+            <span>{detail.vectorName} backbone · {detail.insertLength.toLocaleString()} bp insert</span>
+          </div>
+          <div className="assembly-controls">
+            <button type="button" className="secondary-button" onClick={onClose}>Close</button>
+          </div>
+        </div>
+
+        <div className="validation-grid">
+          <div className="metric-card"><strong>Vector length</strong><span>{detail.vectorLength.toLocaleString()} bp</span></div>
+          <div className="metric-card"><strong>Backbone PCR</strong><span>{detail.vectorAmpliconLength.toLocaleString()} bp</span></div>
+          <div className="metric-card"><strong>Insert PCR</strong><span>{detail.insertLength.toLocaleString()} bp</span></div>
+          <div className="metric-card"><strong>Final construct</strong><span>{detail.assembledLength.toLocaleString()} bp</span></div>
+        </div>
+
+        <div className="primer-grid">
+          <PrimerCard
+            title="Backbone PCR"
+            subtitle={`${detail.vectorAmpliconLength.toLocaleString()} bp amplicon`}
+            forward={detail.primers.vectorForwardPrimer}
+            reverse={detail.primers.vectorReversePrimer}
+            forwardTm={detail.primers.vectorForwardTm}
+            reverseTm={detail.primers.vectorReverseTm}
+            forwardDiagnostics={detail.primers.vectorForwardDiagnostics}
+            reverseDiagnostics={detail.primers.vectorReverseDiagnostics}
+            pairDiagnostics={detail.primers.vectorPairDiagnostics}
+          />
+          <PrimerCard
+            title="Insert PCR"
+            subtitle={`${detail.insertLength.toLocaleString()} bp amplicon`}
+            forward={detail.primers.insertForwardPrimer}
+            reverse={detail.primers.insertReversePrimer}
+            forwardTm={detail.primers.insertForwardTm}
+            reverseTm={detail.primers.insertReverseTm}
+            forwardDiagnostics={detail.primers.insertForwardDiagnostics}
+            reverseDiagnostics={detail.primers.insertReverseDiagnostics}
+            pairDiagnostics={detail.primers.insertPairDiagnostics}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function BatchAssemblyModal(props: {
   detail: BatchDetailSnapshot;
   onClose: () => void;
   onOpenNewTab: () => void;
@@ -1708,30 +1788,6 @@ function BatchDetailModal(props: {
           sequenceLabel={detail.assembledPlasmid.name}
         />
 
-        <div className="primer-grid">
-          <PrimerCard
-            title="Backbone PCR"
-            subtitle={`${detail.vectorAmpliconLength.toLocaleString()} bp amplicon`}
-            forward={detail.primers.vectorForwardPrimer}
-            reverse={detail.primers.vectorReversePrimer}
-            forwardTm={detail.primers.vectorForwardTm}
-            reverseTm={detail.primers.vectorReverseTm}
-            forwardDiagnostics={detail.primers.vectorForwardDiagnostics}
-            reverseDiagnostics={detail.primers.vectorReverseDiagnostics}
-            pairDiagnostics={detail.primers.vectorPairDiagnostics}
-          />
-          <PrimerCard
-            title="Insert PCR"
-            subtitle={`${detail.insertLength.toLocaleString()} bp amplicon`}
-            forward={detail.primers.insertForwardPrimer}
-            reverse={detail.primers.insertReversePrimer}
-            forwardTm={detail.primers.insertForwardTm}
-            reverseTm={detail.primers.insertReverseTm}
-            forwardDiagnostics={detail.primers.insertForwardDiagnostics}
-            reverseDiagnostics={detail.primers.insertReverseDiagnostics}
-            pairDiagnostics={detail.primers.insertPairDiagnostics}
-          />
-        </div>
       </section>
     </div>
   );
