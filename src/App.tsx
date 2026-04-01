@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PlasmidViewer from "./PlasmidViewer";
 import { denseMockPlasmid, sparseMockPlasmid } from "./plasmid-viewer/mockData";
 import {
@@ -85,8 +85,8 @@ type BatchRow = {
   insertReversePrimerTm: number;
   vectorDiagnosticSummary: string;
   insertDiagnosticSummary: string;
-  vectorPairIssues: string;
-  insertPairIssues: string;
+  vectorReview: string;
+  insertReview: string;
   status: string;
   detail: BatchDetailSnapshot | null;
 };
@@ -124,7 +124,6 @@ function createManualPlasmid(args: {
 }
 
 export default function App() {
-  const insertSectionRef = useRef<HTMLElement | null>(null);
   const [plasmids, setPlasmids] = useState<Plasmid[]>([]);
   const [vectorLibraryIds, setVectorLibraryIds] = useState<string[]>([]);
   const [donorLibraryIds, setDonorLibraryIds] = useState<string[]>([]);
@@ -416,8 +415,8 @@ export default function App() {
         ? summarizePrimerSet(batchBackbonePrimers, "vector")
         : "Vector primer set unavailable",
       insertDiagnosticSummary: "Insert primer set unavailable",
-      vectorPairIssues: batchBackbonePrimers ? describePairIssues(batchBackbonePrimers.vectorPairDiagnostics) : "Vector pair unavailable",
-      insertPairIssues: "Insert pair unavailable",
+      vectorReview: batchBackbonePrimers ? describePrimerSetReview(batchBackbonePrimers, "vector") : "Vector pair unavailable",
+      insertReview: "Insert pair unavailable",
       status: "Review",
       detail: null,
       ...patch,
@@ -478,8 +477,8 @@ export default function App() {
             insertReversePrimerTm: designed.insertReverseTm,
             vectorDiagnosticSummary: summarizePrimerSet(designed, "vector"),
             insertDiagnosticSummary: summarizePrimerSet(designed, "insert"),
-            vectorPairIssues: describePairIssues(designed.vectorPairDiagnostics),
-            insertPairIssues: describePairIssues(designed.insertPairDiagnostics),
+            vectorReview: describePrimerSetReview(designed, "vector"),
+            insertReview: describePrimerSetReview(designed, "insert"),
             status: summarizeBatchStatus(designed),
             detail: {
               donorName: donor.name,
@@ -567,8 +566,8 @@ export default function App() {
           insertReversePrimerTm: designed.insertReverseTm,
           vectorDiagnosticSummary: summarizePrimerSet(designed, "vector"),
           insertDiagnosticSummary: summarizePrimerSet(designed, "insert"),
-          vectorPairIssues: describePairIssues(designed.vectorPairDiagnostics),
-          insertPairIssues: describePairIssues(designed.insertPairDiagnostics),
+          vectorReview: describePrimerSetReview(designed, "vector"),
+          insertReview: describePrimerSetReview(designed, "insert"),
           status: summarizeBatchStatus(designed),
           detail: {
             donorName: donor.name,
@@ -742,72 +741,88 @@ export default function App() {
     if (!batchRows.length || !vectorPlasmid || !vectorBackbonePlan || !batchBackbonePrimers) return;
     const lines = [
       [
-        "Name",
-        "Sequence",
-        "Description",
-        "Role",
         "Vector",
-        "Donor",
+        "Insert_plasmid",
+        "Row_type",
+        "Left_boundary",
+        "Right_boundary",
+        "Description",
+        "Backbone_forward_primer",
+        "Backbone_forward_len_nt",
+        "Backbone_forward_tm_c",
+        "Backbone_reverse_primer",
+        "Backbone_reverse_len_nt",
+        "Backbone_reverse_tm_c",
+        "Insert_forward_primer",
+        "Insert_forward_len_nt",
+        "Insert_forward_tm_c",
+        "Insert_reverse_primer",
+        "Insert_reverse_len_nt",
+        "Insert_reverse_tm_c",
+        "Backbone_review",
+        "Insert_review",
+        "Status",
         "Vector_length_bp",
         "Vector_amplicon_bp",
         "Insert_bp",
         "Assembled_plasmid_bp",
-        "Primer_length_nt",
-        "Primer_tm_c",
-        "Status",
       ].join(","),
-      ...batchRows.flatMap((row) => {
-        if (!row.vectorForwardPrimer || !row.vectorReversePrimer || !row.insertForwardPrimer || !row.insertReversePrimer) {
-          return [];
-        }
-        const shared = [
+      [
+        csv(vectorPlasmid.name),
+        csv(""),
+        csv("backbone"),
+        csv(""),
+        csv(""),
+        csv(`${summarizePrimerSet(batchBackbonePrimers, "vector")}. ${batchVectorAmpliconLength.toLocaleString()} bp backbone PCR.`),
+        csv(batchBackbonePrimers.vectorForwardPrimer),
+        batchBackbonePrimers.vectorForwardPrimer.length,
+        batchBackbonePrimers.vectorForwardTm.toFixed(1),
+        csv(batchBackbonePrimers.vectorReversePrimer),
+        batchBackbonePrimers.vectorReversePrimer.length,
+        batchBackbonePrimers.vectorReverseTm.toFixed(1),
+        csv(""),
+        csv(""),
+        csv(""),
+        csv(""),
+        csv(""),
+        csv(""),
+        csv(describePrimerSetReview(batchBackbonePrimers, "vector")),
+        csv(""),
+        csv(summarizePrimerSet(batchBackbonePrimers, "vector")),
+        vectorPlasmid.length,
+        batchVectorAmpliconLength,
+        "",
+        "",
+      ].join(","),
+      ...batchRows.map((row) =>
+        [
           csv(vectorPlasmid.name),
           csv(row.donorName),
+          csv("insert"),
+          csv(row.matchedLeft),
+          csv(row.matchedRight),
+          csv(`${row.insertDiagnosticSummary}. ${row.insertLength.toLocaleString()} bp insert PCR.`),
+          csv(""),
+          "",
+          "",
+          csv(""),
+          "",
+          "",
+          csv(row.insertForwardPrimer),
+          row.insertForwardPrimerLength || "",
+          row.insertForwardPrimerTm ? row.insertForwardPrimerTm.toFixed(1) : "",
+          csv(row.insertReversePrimer),
+          row.insertReversePrimerLength || "",
+          row.insertReversePrimerTm ? row.insertReversePrimerTm.toFixed(1) : "",
+          csv(row.vectorReview),
+          csv(row.insertReview),
+          csv(row.status),
           row.vectorLength,
           row.vectorAmpliconLength,
-          row.insertLength,
-          row.assembledLength,
-          csv(row.status),
-        ];
-        return [
-          [
-            csv(`${row.donorName} backbone F`),
-            csv(row.vectorForwardPrimer),
-            csv(`${row.vectorDiagnosticSummary}. ${row.vectorAmpliconLength} bp backbone PCR.`),
-            csv("vector_forward"),
-            ...shared,
-            row.vectorForwardPrimerLength,
-            row.vectorForwardPrimerTm.toFixed(1),
-          ].join(","),
-          [
-            csv(`${row.donorName} backbone R`),
-            csv(row.vectorReversePrimer),
-            csv(`${row.vectorDiagnosticSummary}. ${row.vectorAmpliconLength} bp backbone PCR.`),
-            csv("vector_reverse"),
-            ...shared,
-            row.vectorReversePrimerLength,
-            row.vectorReversePrimerTm.toFixed(1),
-          ].join(","),
-          [
-            csv(`${row.donorName} insert F`),
-            csv(row.insertForwardPrimer),
-            csv(`${row.insertDiagnosticSummary}. ${row.insertLength} bp insert PCR.`),
-            csv("insert_forward"),
-            ...shared,
-            row.insertForwardPrimerLength,
-            row.insertForwardPrimerTm.toFixed(1),
-          ].join(","),
-          [
-            csv(`${row.donorName} insert R`),
-            csv(row.insertReversePrimer),
-            csv(`${row.insertDiagnosticSummary}. ${row.insertLength} bp insert PCR.`),
-            csv("insert_reverse"),
-            ...shared,
-            row.insertReversePrimerLength,
-            row.insertReversePrimerTm.toFixed(1),
-          ].join(","),
-        ];
-      }),
+          row.insertLength || "",
+          row.assembledLength || "",
+        ].join(","),
+      ),
     ];
     downloadFile("batch-assembly-primers-snapgene.csv", lines.join("\n"), "text/csv");
   }
@@ -921,18 +936,9 @@ export default function App() {
           setManualRegionStart={setManualVectorReplaceStart}
           manualRegionEnd={manualVectorReplaceEnd}
           setManualRegionEnd={setManualVectorReplaceEnd}
-          footerAction={
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => insertSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-            >
-              Continue To Insert Selection
-            </button>
-          }
         />
 
-        <section ref={insertSectionRef}>
+        <section>
         <RulePanel
           title="2. Insert Rule"
           plasmid={insertPlasmid}
@@ -1620,6 +1626,7 @@ function BatchPanel(props: {
       <div className="batch-table">
         <div className="batch-row batch-head">
           <span>Donor</span>
+          <span>View assembled</span>
           <span>Left</span>
           <span>Right</span>
           <span>Vector len</span>
@@ -1632,21 +1639,30 @@ function BatchPanel(props: {
           <span>Vector R primer</span>
           <span>Vector R len</span>
           <span>Vector R Tm</span>
-          <span>Vector pair issues</span>
+          <span>Backbone review</span>
           <span>Insert F primer</span>
           <span>Insert F len</span>
           <span>Insert F Tm</span>
           <span>Insert R primer</span>
           <span>Insert R len</span>
           <span>Insert R Tm</span>
-          <span>Insert pair issues</span>
+          <span>Insert review</span>
           <span>Diagnostics</span>
-          <span>Assembled plasmid</span>
           <span>Status</span>
         </div>
         {batchRows.map((row) => (
           <div key={`${row.donorName}-${row.status}-${row.matchedLeft}-${row.matchedRight}`} className="batch-row">
             <span className="batch-donor-cell">{row.donorName}</span>
+            <span>
+              <button
+                type="button"
+                className="secondary-button batch-diagnostics-button"
+                onClick={() => row.detail && onOpenDetail(row.detail, "assembly")}
+                disabled={!row.detail}
+              >
+                View assembled
+              </button>
+            </span>
             <span>{row.matchedLeft || "—"}</span>
             <span>{row.matchedRight || "—"}</span>
             <span>{row.vectorLength ? row.vectorLength.toLocaleString() : "—"}</span>
@@ -1659,14 +1675,14 @@ function BatchPanel(props: {
             <code>{row.vectorReversePrimer || "—"}</code>
             <span>{row.vectorReversePrimerLength || "—"}</span>
             <span>{row.vectorReversePrimerTm ? `${row.vectorReversePrimerTm.toFixed(1)}°C` : "—"}</span>
-            <span className="batch-reasons">{row.vectorPairIssues}</span>
+            <span className="batch-reasons">{row.vectorReview}</span>
             <code>{row.insertForwardPrimer || "—"}</code>
             <span>{row.insertForwardPrimerLength || "—"}</span>
             <span>{row.insertForwardPrimerTm ? `${row.insertForwardPrimerTm.toFixed(1)}°C` : "—"}</span>
             <code>{row.insertReversePrimer || "—"}</code>
             <span>{row.insertReversePrimerLength || "—"}</span>
             <span>{row.insertReversePrimerTm ? `${row.insertReversePrimerTm.toFixed(1)}°C` : "—"}</span>
-            <span className="batch-reasons">{row.insertPairIssues}</span>
+            <span className="batch-reasons">{row.insertReview}</span>
             <span>
               <button
                 type="button"
@@ -1675,16 +1691,6 @@ function BatchPanel(props: {
                 disabled={!row.detail}
               >
                 View diagnostics
-              </button>
-            </span>
-            <span>
-              <button
-                type="button"
-                className="secondary-button batch-diagnostics-button"
-                onClick={() => row.detail && onOpenDetail(row.detail, "assembly")}
-                disabled={!row.detail}
-              >
-                View plasmid
               </button>
             </span>
             <span title={`${row.vectorDiagnosticSummary}. ${row.insertDiagnosticSummary}`}>{row.status}</span>
@@ -1863,6 +1869,21 @@ function describePairIssues(diagnostics: PrimerPairDiagnostics): string {
   const flagged = diagnostics.checks.filter((check) => check.status !== "pass");
   if (!flagged.length) return "All checks passed";
   return flagged.map((check) => `${check.label} (${check.detail})`).join("; ");
+}
+
+function describePrimerSetReview(primers: SeamlessAssemblyPrimers, kind: "vector" | "insert"): string {
+  const forward = kind === "vector" ? primers.vectorForwardDiagnostics : primers.insertForwardDiagnostics;
+  const reverse = kind === "vector" ? primers.vectorReverseDiagnostics : primers.insertReverseDiagnostics;
+  const pair = kind === "vector" ? primers.vectorPairDiagnostics : primers.insertPairDiagnostics;
+
+  const parts = [
+    { label: "F", text: describeDiagnosticIssues(forward) },
+    { label: "R", text: describeDiagnosticIssues(reverse) },
+    { label: "Pair", text: describePairIssues(pair) },
+  ].filter((entry) => entry.text !== "All checks passed");
+
+  if (!parts.length) return "All checks passed";
+  return parts.map((entry) => `${entry.label}: ${entry.text}`).join(" | ");
 }
 
 function mergeCurrentFeatureOption(options: string[], currentValue: string): string[] {

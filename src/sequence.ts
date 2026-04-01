@@ -299,12 +299,12 @@ function evaluatePrimerDiagnostics(sequence: string, tm: number): PrimerDiagnost
   const checks: PrimerCheck[] = [
     {
       label: "Length",
-      status: sequence.length >= 18 && sequence.length <= 30 ? "pass" : sequence.length >= 16 && sequence.length <= 34 ? "warn" : "fail",
+      status: sequence.length >= 18 && sequence.length <= 32 ? "pass" : sequence.length >= 16 && sequence.length <= 36 ? "warn" : "fail",
       detail: `${sequence.length} nt`,
     },
     {
       label: "Tm",
-      status: tm >= 58 && tm <= 66 ? "pass" : tm >= 55 && tm <= 70 ? "warn" : "fail",
+      status: tm >= 57 && tm <= 67 ? "pass" : tm >= 52 && tm <= 72 ? "warn" : "fail",
       detail: `${tm.toFixed(1)}°C`,
     },
     {
@@ -322,17 +322,17 @@ function evaluatePrimerDiagnostics(sequence: string, tm: number): PrimerDiagnost
     },
     {
       label: "Runs",
-      status: homopolymer <= 4 ? "pass" : homopolymer <= 5 ? "warn" : "fail",
+      status: homopolymer <= 4 ? "pass" : homopolymer <= 6 ? "warn" : "fail",
       detail: `${homopolymer} bp homopolymer`,
     },
     {
       label: "Self-dimer",
-      status: selfDimer3Prime <= 4 ? "pass" : selfDimer3Prime <= 6 ? "warn" : "fail",
+      status: selfDimer3Prime <= 4 ? "pass" : selfDimer3Prime <= 7 ? "warn" : "fail",
       detail: `${selfDimer3Prime} bp 3' complement`,
     },
     {
       label: "Hairpin",
-      status: hairpinRisk <= 4 ? "pass" : hairpinRisk <= 6 ? "warn" : "fail",
+      status: hairpinRisk <= 5 ? "pass" : hairpinRisk <= 8 ? "warn" : "fail",
       detail: `${hairpinRisk} bp stem risk`,
     },
   ];
@@ -354,12 +354,12 @@ function evaluatePrimerPair(forward: string, reverse: string, forwardTm: number,
   const checks: PrimerCheck[] = [
     {
       label: "Tm match",
-      status: tmDelta <= 3 ? "pass" : tmDelta <= 6 ? "warn" : "fail",
+      status: tmDelta <= 4 ? "pass" : tmDelta <= 8 ? "warn" : "fail",
       detail: `${tmDelta.toFixed(1)}°C delta`,
     },
     {
       label: "Cross-dimer",
-      status: hetero3Prime <= 4 ? "pass" : hetero3Prime <= 6 ? "warn" : "fail",
+      status: hetero3Prime <= 4 ? "pass" : hetero3Prime <= 7 ? "warn" : "fail",
       detail: `${hetero3Prime} bp 3' complement`,
     },
   ];
