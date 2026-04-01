@@ -281,12 +281,12 @@ function evaluatePrimerDiagnostics(sequence: string, tm: number): PrimerDiagnost
   const checks: PrimerCheck[] = [
     {
       label: "Length",
-      status: sequence.length >= 18 && sequence.length <= 32 ? "pass" : sequence.length >= 15 && sequence.length <= 35 ? "warn" : "fail",
+      status: sequence.length >= 18 && sequence.length <= 30 ? "pass" : sequence.length >= 16 && sequence.length <= 34 ? "warn" : "fail",
       detail: `${sequence.length} nt`,
     },
     {
       label: "Tm",
-      status: tm >= 55 && tm <= 68 ? "pass" : tm >= 52 && tm <= 72 ? "warn" : "fail",
+      status: tm >= 58 && tm <= 66 ? "pass" : tm >= 55 && tm <= 70 ? "warn" : "fail",
       detail: `${tm.toFixed(1)}°C`,
     },
     {
@@ -304,17 +304,17 @@ function evaluatePrimerDiagnostics(sequence: string, tm: number): PrimerDiagnost
     },
     {
       label: "Runs",
-      status: homopolymer <= 4 ? "pass" : homopolymer === 5 ? "warn" : "fail",
+      status: homopolymer <= 4 ? "pass" : homopolymer <= 5 ? "warn" : "fail",
       detail: `${homopolymer} bp homopolymer`,
     },
     {
       label: "Self-dimer",
-      status: selfDimer3Prime <= 4 ? "pass" : selfDimer3Prime === 5 ? "warn" : "fail",
+      status: selfDimer3Prime <= 4 ? "pass" : selfDimer3Prime <= 6 ? "warn" : "fail",
       detail: `${selfDimer3Prime} bp 3' complement`,
     },
     {
       label: "Hairpin",
-      status: hairpinRisk <= 4 ? "pass" : hairpinRisk === 5 ? "warn" : "fail",
+      status: hairpinRisk <= 4 ? "pass" : hairpinRisk <= 6 ? "warn" : "fail",
       detail: `${hairpinRisk} bp stem risk`,
     },
   ];
@@ -336,12 +336,12 @@ function evaluatePrimerPair(forward: string, reverse: string, forwardTm: number,
   const checks: PrimerCheck[] = [
     {
       label: "Tm match",
-      status: tmDelta <= 5 ? "pass" : tmDelta <= 8 ? "warn" : "fail",
+      status: tmDelta <= 3 ? "pass" : tmDelta <= 6 ? "warn" : "fail",
       detail: `${tmDelta.toFixed(1)}°C delta`,
     },
     {
       label: "Cross-dimer",
-      status: hetero3Prime <= 4 ? "pass" : hetero3Prime === 5 ? "warn" : "fail",
+      status: hetero3Prime <= 4 ? "pass" : hetero3Prime <= 6 ? "warn" : "fail",
       detail: `${hetero3Prime} bp 3' complement`,
     },
   ];
@@ -370,11 +370,11 @@ type PrimerPairCandidate = {
 
 function scorePrimerCandidate(diagnostics: PrimerDiagnostics, targetTm: number): number {
   let score = Math.abs(diagnostics.tm - targetTm) * 2.5 + Math.abs(diagnostics.gcPercent - 50) * 0.35;
-  if (diagnostics.status === "warn") score += 8;
-  if (diagnostics.status === "fail") score += 20;
+  if (diagnostics.status === "warn") score += 4;
+  if (diagnostics.status === "fail") score += 12;
   for (const check of diagnostics.checks) {
-    if (check.status === "warn") score += 2;
-    if (check.status === "fail") score += 8;
+    if (check.status === "warn") score += 1;
+    if (check.status === "fail") score += 5;
   }
   return score;
 }
@@ -432,11 +432,11 @@ function pickPrimerPair(
       };
       const diagnostics = evaluatePrimerPair(forward.segment, reverse.segment, forward.tm, reverseTemplate.tm);
       let score = forward.score + reverseTemplate.score + Math.abs(forward.tm - reverseTemplate.tm) * 1.75;
-      if (diagnostics.status === "warn") score += 6;
-      if (diagnostics.status === "fail") score += 18;
+      if (diagnostics.status === "warn") score += 3;
+      if (diagnostics.status === "fail") score += 10;
       for (const check of diagnostics.checks) {
-        if (check.status === "warn") score += 1.5;
-        if (check.status === "fail") score += 7;
+        if (check.status === "warn") score += 1;
+        if (check.status === "fail") score += 4;
       }
       if (!best || score < best.score) {
         best = { forward, reverse, diagnostics, score };
@@ -462,6 +462,34 @@ function pickPrimerPair(
       diagnostics: reverseTemplate.diagnostics,
     },
     pairDiagnostics: evaluatePrimerPair(forward.segment, reverseComplement(reverseTemplate.segment), forward.tm, reverseTemplate.tm),
+  };
+}
+
+function pickBackbonePrimerPair(
+  vectorSequence: string,
+  leftKeptEnd: number,
+  rightKeptStart: number,
+  targetTm = 60,
+): {
+  forward: { segment: string; tm: number; diagnostics: PrimerDiagnostics };
+  reverse: { segment: string; tm: number; diagnostics: PrimerDiagnostics };
+  pairDiagnostics: PrimerPairDiagnostics;
+} {
+  const windowSize = Math.min(60, Math.max(24, vectorSequence.length));
+  const forwardWindow = sliceCircular(vectorSequence, rightKeptStart, windowSize);
+  const reverseWindow = sliceCircular(vectorSequence, leftKeptEnd - windowSize + 1, windowSize);
+  const forward = pickAnnealSegment(forwardWindow, "start", targetTm);
+  const reverseTemplate = pickAnnealSegment(reverseWindow, "end", targetTm);
+  const reverse = {
+    segment: reverseComplement(reverseTemplate.segment),
+    tm: reverseTemplate.tm,
+    diagnostics: reverseTemplate.diagnostics,
+  };
+
+  return {
+    forward,
+    reverse,
+    pairDiagnostics: evaluatePrimerPair(forward.segment, reverse.segment, forward.tm, reverse.tm),
   };
 }
 
@@ -658,7 +686,7 @@ export function designSeamlessReplacementPrimers(args: {
     insertSequence.length,
   );
 
-  const vectorPair = pickPrimerPair(sliceCircular(vectorSequence, rightBoundaryStart, 40));
+  const vectorPair = pickBackbonePrimerPair(vectorSequence, leftBoundaryEnd, rightBoundaryStart);
   const insertPair = pickPrimerPair(insertSequence);
   const vectorForwardAnneal = vectorPair.forward;
   const vectorReverseAnneal = vectorPair.reverse.segment;
@@ -744,7 +772,7 @@ export function designPrimersFromVectorJunctions(args: {
     insertSequence.length,
   );
 
-  const vectorPair = pickPrimerPair(sliceCircular(vectorSequence, rightKeptStart, 40));
+  const vectorPair = pickBackbonePrimerPair(vectorSequence, leftKeptEnd, rightKeptStart);
   const insertPair = pickPrimerPair(insertSequence);
   const vectorForwardAnneal = vectorPair.forward;
   const vectorReverseAnneal = vectorPair.reverse.segment;

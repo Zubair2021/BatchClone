@@ -81,15 +81,9 @@ type BatchRow = {
   insertReversePrimer: string;
   insertReversePrimerLength: number;
   insertReversePrimerTm: number;
-  vectorDiagnostics: PrimerDiagnosticStatus;
-  insertDiagnostics: PrimerDiagnosticStatus;
   vectorDiagnosticSummary: string;
   insertDiagnosticSummary: string;
-  vectorForwardIssues: string;
-  vectorReverseIssues: string;
   vectorPairIssues: string;
-  insertForwardIssues: string;
-  insertReverseIssues: string;
   insertPairIssues: string;
   status: string;
   detail: BatchDetailSnapshot | null;
@@ -344,23 +338,11 @@ export default function App() {
       insertReversePrimer: "",
       insertReversePrimerLength: 0,
       insertReversePrimerTm: 0,
-      vectorDiagnostics: batchBackbonePrimers
-        ? combineStatuses([
-            batchBackbonePrimers.vectorForwardDiagnostics.status,
-            batchBackbonePrimers.vectorReverseDiagnostics.status,
-            batchBackbonePrimers.vectorPairDiagnostics.status,
-          ])
-        : "fail",
-      insertDiagnostics: "fail",
       vectorDiagnosticSummary: batchBackbonePrimers
         ? summarizePrimerSet(batchBackbonePrimers, "vector")
         : "Vector primer set unavailable",
       insertDiagnosticSummary: "Insert primer set unavailable",
-      vectorForwardIssues: batchBackbonePrimers ? describeDiagnosticIssues(batchBackbonePrimers.vectorForwardDiagnostics) : "Vector primer unavailable",
-      vectorReverseIssues: batchBackbonePrimers ? describeDiagnosticIssues(batchBackbonePrimers.vectorReverseDiagnostics) : "Vector primer unavailable",
       vectorPairIssues: batchBackbonePrimers ? describePairIssues(batchBackbonePrimers.vectorPairDiagnostics) : "Vector pair unavailable",
-      insertForwardIssues: "Insert primer unavailable",
-      insertReverseIssues: "Insert primer unavailable",
       insertPairIssues: "Insert pair unavailable",
       status: "Review",
       detail: null,
@@ -420,23 +402,9 @@ export default function App() {
             insertReversePrimer: designed.insertReversePrimer,
             insertReversePrimerLength: designed.insertReversePrimer.length,
             insertReversePrimerTm: designed.insertReverseTm,
-            vectorDiagnostics: combineStatuses([
-              designed.vectorForwardDiagnostics.status,
-              designed.vectorReverseDiagnostics.status,
-              designed.vectorPairDiagnostics.status,
-            ]),
-            insertDiagnostics: combineStatuses([
-              designed.insertForwardDiagnostics.status,
-              designed.insertReverseDiagnostics.status,
-              designed.insertPairDiagnostics.status,
-            ]),
             vectorDiagnosticSummary: summarizePrimerSet(designed, "vector"),
             insertDiagnosticSummary: summarizePrimerSet(designed, "insert"),
-            vectorForwardIssues: describeDiagnosticIssues(designed.vectorForwardDiagnostics),
-            vectorReverseIssues: describeDiagnosticIssues(designed.vectorReverseDiagnostics),
             vectorPairIssues: describePairIssues(designed.vectorPairDiagnostics),
-            insertForwardIssues: describeDiagnosticIssues(designed.insertForwardDiagnostics),
-            insertReverseIssues: describeDiagnosticIssues(designed.insertReverseDiagnostics),
             insertPairIssues: describePairIssues(designed.insertPairDiagnostics),
             status: summarizeBatchStatus(designed),
             detail: {
@@ -523,23 +491,9 @@ export default function App() {
           insertReversePrimer: designed.insertReversePrimer,
           insertReversePrimerLength: designed.insertReversePrimer.length,
           insertReversePrimerTm: designed.insertReverseTm,
-          vectorDiagnostics: combineStatuses([
-            designed.vectorForwardDiagnostics.status,
-            designed.vectorReverseDiagnostics.status,
-            designed.vectorPairDiagnostics.status,
-          ]),
-          insertDiagnostics: combineStatuses([
-            designed.insertForwardDiagnostics.status,
-            designed.insertReverseDiagnostics.status,
-            designed.insertPairDiagnostics.status,
-          ]),
           vectorDiagnosticSummary: summarizePrimerSet(designed, "vector"),
           insertDiagnosticSummary: summarizePrimerSet(designed, "insert"),
-          vectorForwardIssues: describeDiagnosticIssues(designed.vectorForwardDiagnostics),
-          vectorReverseIssues: describeDiagnosticIssues(designed.vectorReverseDiagnostics),
           vectorPairIssues: describePairIssues(designed.vectorPairDiagnostics),
-          insertForwardIssues: describeDiagnosticIssues(designed.insertForwardDiagnostics),
-          insertReverseIssues: describeDiagnosticIssues(designed.insertReverseDiagnostics),
           insertPairIssues: describePairIssues(designed.insertPairDiagnostics),
           status: summarizeBatchStatus(designed),
           detail: {
@@ -1350,6 +1304,20 @@ function PrimerCard(props: {
       <div className="primer-row muted"><span>Tm</span><span>{props.reverseTm.toFixed(1)}°C</span></div>
       <div className="primer-row muted"><span>Checks</span><span>{renderCheckSummary(props.reverseDiagnostics.checks)}</span></div>
       <div className="primer-row muted"><span>Pair</span><span>{renderCheckSummary(props.pairDiagnostics.checks)}</span></div>
+      <div className="primer-issue-list">
+        <div className="primer-issue">
+          <strong>Forward issues</strong>
+          <span>{describeDiagnosticIssues(props.forwardDiagnostics)}</span>
+        </div>
+        <div className="primer-issue">
+          <strong>Reverse issues</strong>
+          <span>{describeDiagnosticIssues(props.reverseDiagnostics)}</span>
+        </div>
+        <div className="primer-issue">
+          <strong>Pair issues</strong>
+          <span>{describePairIssues(props.pairDiagnostics)}</span>
+        </div>
+      </div>
     </article>
   );
 }
@@ -1488,31 +1456,23 @@ function BatchPanel(props: {
           <span>Vector F primer</span>
           <span>Vector F len</span>
           <span>Vector F Tm</span>
-          <span>Vector F issues</span>
           <span>Vector R primer</span>
           <span>Vector R len</span>
           <span>Vector R Tm</span>
-          <span>Vector R issues</span>
           <span>Vector pair issues</span>
           <span>Insert F primer</span>
           <span>Insert F len</span>
           <span>Insert F Tm</span>
-          <span>Insert F issues</span>
           <span>Insert R primer</span>
           <span>Insert R len</span>
           <span>Insert R Tm</span>
-          <span>Insert R issues</span>
           <span>Insert pair issues</span>
           <span>Diagnostics</span>
           <span>Status</span>
         </div>
         {batchRows.map((row) => (
           <div key={`${row.donorName}-${row.status}-${row.matchedLeft}-${row.matchedRight}`} className="batch-row">
-            <span className="batch-donor-cell">
-              <button type="button" className="batch-link-button" onClick={() => onOpenDetail(row.detail)}>
-                {row.donorName}
-              </button>
-            </span>
+            <span className="batch-donor-cell">{row.donorName}</span>
             <span>{row.matchedLeft || "—"}</span>
             <span>{row.matchedRight || "—"}</span>
             <span>{row.vectorLength ? row.vectorLength.toLocaleString() : "—"}</span>
@@ -1522,27 +1482,27 @@ function BatchPanel(props: {
             <code>{row.vectorForwardPrimer || "—"}</code>
             <span>{row.vectorForwardPrimerLength || "—"}</span>
             <span>{row.vectorForwardPrimerTm ? `${row.vectorForwardPrimerTm.toFixed(1)}°C` : "—"}</span>
-            <span className="batch-reasons">{row.vectorForwardIssues}</span>
             <code>{row.vectorReversePrimer || "—"}</code>
             <span>{row.vectorReversePrimerLength || "—"}</span>
             <span>{row.vectorReversePrimerTm ? `${row.vectorReversePrimerTm.toFixed(1)}°C` : "—"}</span>
-            <span className="batch-reasons">{row.vectorReverseIssues}</span>
             <span className="batch-reasons">{row.vectorPairIssues}</span>
             <code>{row.insertForwardPrimer || "—"}</code>
             <span>{row.insertForwardPrimerLength || "—"}</span>
             <span>{row.insertForwardPrimerTm ? `${row.insertForwardPrimerTm.toFixed(1)}°C` : "—"}</span>
-            <span className="batch-reasons">{row.insertForwardIssues}</span>
             <code>{row.insertReversePrimer || "—"}</code>
             <span>{row.insertReversePrimerLength || "—"}</span>
             <span>{row.insertReversePrimerTm ? `${row.insertReversePrimerTm.toFixed(1)}°C` : "—"}</span>
-            <span className="batch-reasons">{row.insertReverseIssues}</span>
             <span className="batch-reasons">{row.insertPairIssues}</span>
-            <span>{renderStatusSummary(
-              row.vectorDiagnostics,
-              row.insertDiagnostics,
-              summarizeIssueBlock(row.vectorForwardIssues, row.vectorReverseIssues, row.vectorPairIssues),
-              summarizeIssueBlock(row.insertForwardIssues, row.insertReverseIssues, row.insertPairIssues),
-            )}</span>
+            <span>
+              <button
+                type="button"
+                className="secondary-button batch-diagnostics-button"
+                onClick={() => row.detail && onOpenDetail(row.detail)}
+                disabled={!row.detail}
+              >
+                View diagnostics
+              </button>
+            </span>
             <span title={`${row.vectorDiagnosticSummary}. ${row.insertDiagnosticSummary}`}>{row.status}</span>
           </div>
         ))}
@@ -1690,20 +1650,6 @@ function describePairIssues(diagnostics: PrimerPairDiagnostics): string {
   return flagged.map((check) => `${check.label} (${check.detail})`).join("; ");
 }
 
-function renderStatusPair(vectorStatus: PrimerDiagnosticStatus, insertStatus: PrimerDiagnosticStatus): React.ReactNode {
-  return (
-    <span className="check-badge-row">
-      <span className={`check-badge ${vectorStatus}`}>{statusIcon(vectorStatus)} Vector</span>
-      <span className={`check-badge ${insertStatus}`}>{statusIcon(insertStatus)} Insert</span>
-    </span>
-  );
-}
-
-function summarizeIssueBlock(...items: string[]): string {
-  const flagged = items.filter((item) => item !== "All checks passed" && !item.includes("unavailable"));
-  return flagged[0] ?? "All checks passed";
-}
-
 function mergeCurrentFeatureOption(options: string[], currentValue: string): string[] {
   const normalizedCurrent = currentValue.trim();
   if (!normalizedCurrent) return options;
@@ -1714,22 +1660,4 @@ function mergeCurrentFeatureOption(options: string[], currentValue: string): str
     seen.add(key);
     return true;
   });
-}
-
-function renderStatusSummary(
-  vectorStatus: PrimerDiagnosticStatus,
-  insertStatus: PrimerDiagnosticStatus,
-  vectorSummary: string,
-  insertSummary: string,
-): React.ReactNode {
-  return (
-    <span className="diagnostic-summary">
-      <span className="check-badge-row">
-        <span className={`check-badge ${vectorStatus}`}>{statusIcon(vectorStatus)} Vector</span>
-        <span className={`check-badge ${insertStatus}`}>{statusIcon(insertStatus)} Insert</span>
-      </span>
-      <span className="batch-reasons">Vector: {vectorSummary}</span>
-      <span className="batch-reasons">Insert: {insertSummary}</span>
-    </span>
-  );
 }
