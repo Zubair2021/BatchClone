@@ -3,7 +3,7 @@ import type { Feature, Plasmid } from "./types";
 import LegendPanel from "./plasmid-viewer/LegendPanel";
 import PlasmidMap from "./plasmid-viewer/PlasmidMap";
 import FeatureTooltip from "./plasmid-viewer/FeatureTooltip";
-import { formatSequence } from "./plasmid-viewer/utils";
+import { computeRawSpan, featureContainsPosition, formatSequence, statefulColor } from "./plasmid-viewer/utils";
 
 type ViewerProps = {
   plasmid: Plasmid | null;
@@ -82,6 +82,35 @@ export default function PlasmidViewer(props: ViewerProps) {
 
   const plasmidData = activePlasmid;
   const mapFeatures = plasmidData.features.filter((feature) => visibleIds.has(feature.id));
+  const sequenceValue = activeSequenceText ?? plasmidData.sequence;
+  const displayedRegion = useMemo(() => {
+    if (!sequenceValue.length || sequenceValue.length >= plasmidData.length) {
+      return { start: 0, length: sequenceValue.length };
+    }
+    if (!highlightedSpan) return { start: 0, length: sequenceValue.length };
+    if (highlightMode === "backbone") {
+      return {
+        start: (highlightedSpan.end + 1) % plasmidData.length,
+        length: sequenceValue.length,
+      };
+    }
+    return {
+      start: highlightedSpan.start,
+      length: sequenceValue.length,
+    };
+  }, [highlightMode, highlightedSpan, plasmidData.length, sequenceValue.length]);
+  const sequenceRows = useMemo(
+    () =>
+      buildSequenceRows({
+        sequence: sequenceValue,
+        plasmidLength: plasmidData.length,
+        features: mapFeatures,
+        selectedIds,
+        hoveredId: hoveredFeatureId,
+        start: displayedRegion.start,
+      }),
+    [displayedRegion.start, hoveredFeatureId, mapFeatures, plasmidData.length, selectedIds, sequenceValue],
+  );
 
   function updateTooltip(feature: Feature | null, clientX?: number, clientY?: number) {
     if (!feature || clientX == null || clientY == null) {
@@ -283,12 +312,53 @@ export default function PlasmidViewer(props: ViewerProps) {
       </header>
 
       {tab === "sequence" ? (
-        <div className="sequence-pane">
-          <div className="sequence-header">
-            <strong>{sequenceLabel ?? plasmidData.name}</strong>
-            <span>{(activeSequenceText ?? plasmidData.sequence).length.toLocaleString()} bp</span>
-          </div>
-          <pre>{formatSequence(activeSequenceText ?? plasmidData.sequence)}</pre>
+        <div className={`pv-layout${legendVisible ? "" : " full-width"}`}>
+          <section className="pv-map-panel">
+            <div className="sequence-pane annotated">
+              <div className="sequence-header">
+                <strong>{sequenceLabel ?? plasmidData.name}</strong>
+                <span>{sequenceValue.length.toLocaleString()} bp</span>
+              </div>
+              {sequenceRows.length ? (
+                <div className="sequence-lines">
+                  {sequenceRows.map((row) => (
+                    <div key={`row-${row.start}`} className="sequence-line">
+                      <span className="sequence-line-number">{row.start.toLocaleString()}</span>
+                      <span className="sequence-line-bases">
+                        {row.segments.map((segment, index) => (
+                          <span
+                            key={`${row.start}-${index}-${segment.featureId ?? "plain"}`}
+                            className={`sequence-segment${segment.featureId ? " annotated" : ""}${segment.state ? ` ${segment.state}` : ""}`}
+                            style={segment.color ? { color: segment.color } : undefined}
+                            title={segment.title}
+                          >
+                            {segment.text}
+                          </span>
+                        ))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <pre>{formatSequence(sequenceValue)}</pre>
+              )}
+            </div>
+          </section>
+
+          {legendVisible ? (
+            <LegendPanel
+              plasmidLength={plasmidData.length}
+              features={plasmidData.features}
+              visibleIds={visibleIds}
+              selectedIds={selectedIds}
+              hoveredId={hoveredFeatureId}
+              onFeatureClick={(feature, event) => handleFeatureClick(feature.id, { multi: event.metaKey || event.ctrlKey || event.shiftKey })}
+              onFeatureHover={handleFeatureHover}
+              onToggleVisibility={handleToggleVisibility}
+              onSetVisible={handleSetVisible}
+              onToggleLegend={() => setLegendVisible(false)}
+            />
+          ) : null}
         </div>
       ) : (
         <div className={`pv-layout${legendVisible ? "" : " full-width"}`}>
@@ -381,4 +451,103 @@ export default function PlasmidViewer(props: ViewerProps) {
       )}
     </div>
   );
+}
+
+function buildSequenceRows(args: {
+  sequence: string;
+  plasmidLength: number;
+  features: Feature[];
+  selectedIds: Set<string>;
+  hoveredId: string | null;
+  start: number;
+}) {
+  const { sequence, plasmidLength, features, selectedIds, hoveredId, start } = args;
+  const rows: Array<{
+    start: number;
+    segments: Array<{
+      text: string;
+      color: string | null;
+      featureId: string | null;
+      state: string | null;
+      title: string;
+    }>;
+  }> = [];
+
+  for (let offset = 0; offset < sequence.length; offset += 60) {
+    const line = sequence.slice(offset, offset + 60);
+    const segments: Array<{
+      text: string;
+      color: string | null;
+      featureId: string | null;
+      state: string | null;
+      title: string;
+    }> = [];
+    let current = {
+      text: "",
+      color: null as string | null,
+      featureId: null as string | null,
+      state: null as string | null,
+      title: "",
+    };
+
+    for (let index = 0; index < line.length; index += 1) {
+      const base = line[index] ?? "";
+      const sourcePosition = plasmidLength > 0 ? (start + offset + index) % plasmidLength : index;
+      const feature = resolveSequenceFeature(features, sourcePosition, plasmidLength, selectedIds, hoveredId);
+      const nextColor = feature ? statefulColor(feature.feature.color, feature.state) : null;
+      const nextFeatureId = feature?.feature.id ?? null;
+      const nextState = feature?.state ?? null;
+      const nextTitle = feature
+        ? `${feature.feature.name} · ${feature.feature.type} · ${feature.feature.start + 1}-${feature.feature.end + 1}`
+        : "Unannotated sequence";
+
+      if (current.text && current.featureId === nextFeatureId && current.state === nextState) {
+        current.text += base;
+        continue;
+      }
+
+      if (current.text) segments.push(current);
+      current = {
+        text: base,
+        color: nextColor,
+        featureId: nextFeatureId,
+        state: nextState,
+        title: nextTitle,
+      };
+    }
+
+    if (current.text) segments.push(current);
+    rows.push({
+      start: offset + 1,
+      segments,
+    });
+  }
+
+  return rows;
+}
+
+function resolveSequenceFeature(
+  features: Feature[],
+  position: number,
+  plasmidLength: number,
+  selectedIds: Set<string>,
+  hoveredId: string | null,
+) {
+  const covering = features.filter((feature) => featureContainsPosition(feature, position, plasmidLength));
+  if (!covering.length) return null;
+
+  const prioritized = [...covering].sort((a, b) => {
+    const aSelected = selectedIds.has(a.id) || hoveredId === a.id ? 1 : 0;
+    const bSelected = selectedIds.has(b.id) || hoveredId === b.id ? 1 : 0;
+    if (aSelected !== bSelected) return bSelected - aSelected;
+    return computeRawSpan(a, plasmidLength) - computeRawSpan(b, plasmidLength);
+  })[0];
+
+  if (!prioritized) return null;
+  let state: "selected" | "hovered" | "muted" | "default" = "default";
+  if (selectedIds.has(prioritized.id)) state = "selected";
+  else if (hoveredId === prioritized.id) state = "hovered";
+  else if (selectedIds.size > 0) state = "muted";
+
+  return { feature: prioritized, state };
 }

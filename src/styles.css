@@ -1352,6 +1352,53 @@ code {
   background: linear-gradient(180deg, #ffffff, #f8fafc);
 }
 
+.sequence-pane.annotated {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+}
+
+.sequence-lines {
+  padding: 14px 16px 18px;
+  max-height: 520px;
+  overflow: auto;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+}
+
+.sequence-line {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding-block: 2px;
+}
+
+.sequence-line-number {
+  color: #64748b;
+  font-size: 0.8rem;
+  text-align: right;
+  user-select: none;
+}
+
+.sequence-line-bases {
+  word-break: break-all;
+  line-height: 1.55;
+  letter-spacing: 0.03em;
+}
+
+.sequence-segment {
+  color: #334155;
+}
+
+.sequence-segment.annotated {
+  font-weight: 600;
+}
+
+.sequence-segment.muted {
+  opacity: 0.55;
+}
+
 .batch-panel {
   margin-top: 18px;
   border-top: 1px solid rgba(148, 163, 184, 0.18);

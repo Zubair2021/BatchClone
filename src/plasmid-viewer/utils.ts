@@ -312,6 +312,14 @@ export function truncate(value: string, length: number): string {
   return value.length <= length ? value : `${value.slice(0, length - 1)}…`;
 }
 
+export function featureContainsPosition(feature: Feature, position: number, plasmidLength: number): boolean {
+  if (plasmidLength <= 0) return false;
+  if (feature.start <= feature.end) {
+    return position >= feature.start && position <= feature.end;
+  }
+  return position >= feature.start || position <= feature.end;
+}
+
 export function estimateLabelLineCount(value: string, maxLineLength: number): number {
   const words = value.split(/\s+/).filter(Boolean);
   if (!words.length) return 1;
