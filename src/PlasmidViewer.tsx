@@ -20,7 +20,6 @@ type ViewerProps = {
 };
 
 type TabKey = "map" | "sequence";
-type LabelMode = "smart" | "all" | "none";
 
 export default function PlasmidViewer(props: ViewerProps) {
   const {
@@ -39,8 +38,9 @@ export default function PlasmidViewer(props: ViewerProps) {
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [tab, setTab] = useState<TabKey>("map");
-  const [labelMode, setLabelMode] = useState<LabelMode>("all");
   const [collapseMinorAnnotations, setCollapseMinorAnnotations] = useState(false);
+  const [labelFontSize, setLabelFontSize] = useState(11);
+  const [labelSpacing, setLabelSpacing] = useState(1.1);
   const [zoom, setZoom] = useState(0.34);
   const [legendVisible, setLegendVisible] = useState(true);
   const [hoveredFeatureId, setHoveredFeatureId] = useState<string | null>(null);
@@ -296,17 +296,17 @@ export default function PlasmidViewer(props: ViewerProps) {
             <div className="pv-map-frame">
               {tab === "map" ? (
                 <div className="pv-map-actions">
-                  <label className="pv-inline-control compact">
-                    Labels
-                    <select value={labelMode} onChange={(event) => setLabelMode(event.target.value as LabelMode)}>
-                      <option value="all">All</option>
-                      <option value="smart">Smart</option>
-                      <option value="none">None</option>
-                    </select>
-                  </label>
                   <label className="pv-check compact">
                     <input type="checkbox" checked={collapseMinorAnnotations} onChange={(event) => setCollapseMinorAnnotations(event.target.checked)} />
                     Minor
+                  </label>
+                  <label className="pv-inline-range compact">
+                    Label size
+                    <input type="range" min="9" max="16" step="1" value={labelFontSize} onChange={(event) => setLabelFontSize(Number(event.target.value))} />
+                  </label>
+                  <label className="pv-inline-range compact">
+                    Label spacing
+                    <input type="range" min="0.8" max="2" step="0.1" value={labelSpacing} onChange={(event) => setLabelSpacing(Number(event.target.value))} />
                   </label>
                   <button type="button" className="pv-ghost-button" onClick={() => void copyCurrentMap()}>
                     Copy
@@ -329,8 +329,9 @@ export default function PlasmidViewer(props: ViewerProps) {
                 visibleIds={visibleIds}
                 selectedIds={selectedIds}
                 hoveredId={hoveredFeatureId}
-                labelMode={labelMode}
                 collapseMinorAnnotations={collapseMinorAnnotations}
+                labelFontSize={labelFontSize}
+                labelSpacing={labelSpacing}
                 zoom={zoom}
                 legendVisible={legendVisible}
                 highlightedSpan={highlightedSpan}

@@ -13,6 +13,7 @@ export type LabelLayout = {
   labelY: number;
   textAnchor: "start" | "end";
   lane: number;
+  lineCount: number;
 };
 
 export type DerivedFeature = {
@@ -202,19 +203,13 @@ export function getStrandLabel(strand?: number): string {
 
 export function shouldDisplayLabel(args: {
   derived: DerivedFeature;
-  labelMode: "all" | "smart" | "none";
   collapseMinorAnnotations: boolean;
   selectedIds: Set<string>;
   hoveredId: string | null;
   plasmidLength: number;
 }): boolean {
-  const { derived, labelMode, collapseMinorAnnotations, selectedIds, hoveredId, plasmidLength } = args;
-  if (labelMode === "none") return false;
+  const { derived, collapseMinorAnnotations, selectedIds, hoveredId, plasmidLength } = args;
   if (selectedIds.has(derived.feature.id) || hoveredId === derived.feature.id) return true;
-  if (labelMode === "smart") {
-    if (collapseMinorAnnotations && derived.span < plasmidLength * 0.018) return false;
-    return derived.span >= plasmidLength * 0.02 || derived.lane < 2;
-  }
   if (collapseMinorAnnotations) {
     return derived.span >= plasmidLength * 0.012;
   }
@@ -227,8 +222,9 @@ export function buildLabelLayouts(args: {
   outerRadius: number;
   labelRadius: number;
   minGap: number;
+  lineHeight: number;
 }): LabelLayout[] {
-  const { features, center, outerRadius, labelRadius, minGap } = args;
+  const { features, center, outerRadius, labelRadius, minGap, lineHeight } = args;
   const left: LabelLayout[] = [];
   const right: LabelLayout[] = [];
   const perSideCount = Math.max(1, Math.ceil(features.length / 2));
@@ -239,6 +235,7 @@ export function buildLabelLayouts(args: {
     const elbow = polar(center, center, labelRadius - 18 + derived.lane * 12, clampAngle(derived.midAngle));
     const side = Math.cos(derived.midAngle) >= 0 ? "right" : "left";
     const targetX = side === "right" ? center + labelRadius + derived.lane * 24 : center - labelRadius - derived.lane * 24;
+    const lineCount = estimateLabelLineCount(derived.feature.name, 18);
 
     const layout: LabelLayout = {
       featureId: derived.feature.id,
@@ -251,16 +248,17 @@ export function buildLabelLayouts(args: {
       labelY: elbow.y,
       textAnchor: side === "right" ? "start" : "end",
       lane: derived.lane,
+      lineCount,
     };
 
     if (side === "right") right.push(layout);
     else left.push(layout);
   }
 
-  return [...distributeLayouts(left, center, dynamicGap), ...distributeLayouts(right, center, dynamicGap)];
+  return [...distributeLayouts(left, center, dynamicGap, lineHeight), ...distributeLayouts(right, center, dynamicGap, lineHeight)];
 }
 
-function distributeLayouts(layouts: LabelLayout[], center: number, minGap: number): LabelLayout[] {
+function distributeLayouts(layouts: LabelLayout[], center: number, minGap: number, lineHeight: number): LabelLayout[] {
   const sorted = [...layouts].sort((a, b) => a.labelY - b.labelY);
   const minY = center - 300;
   const maxY = center + 300;
@@ -274,9 +272,11 @@ function distributeLayouts(layouts: LabelLayout[], center: number, minGap: numbe
       };
       continue;
     }
+    const previousHeight = Math.max(lineHeight, previous.lineCount * lineHeight);
+    const currentHeight = Math.max(lineHeight, sorted[index].lineCount * lineHeight);
     sorted[index] = {
       ...sorted[index],
-      labelY: Math.max(sorted[index].labelY, previous.labelY + minGap),
+      labelY: Math.max(sorted[index].labelY, previous.labelY + previousHeight + Math.max(minGap, currentHeight * 0.25)),
     };
   }
 
@@ -286,8 +286,11 @@ function distributeLayouts(layouts: LabelLayout[], center: number, minGap: numbe
     if (next.labelY > maxY) {
       sorted[index + 1] = { ...next, labelY: maxY };
     }
-    if (sorted[index].labelY > next.labelY - minGap) {
-      sorted[index] = { ...sorted[index], labelY: next.labelY - minGap };
+    const currentHeight = Math.max(lineHeight, sorted[index].lineCount * lineHeight);
+    const nextHeight = Math.max(lineHeight, next.lineCount * lineHeight);
+    const requiredGap = currentHeight + Math.max(minGap, nextHeight * 0.25);
+    if (sorted[index].labelY > next.labelY - requiredGap) {
+      sorted[index] = { ...sorted[index], labelY: next.labelY - requiredGap };
     }
   }
 
@@ -307,4 +310,24 @@ export function formatSequence(sequence: string) {
 
 export function truncate(value: string, length: number): string {
   return value.length <= length ? value : `${value.slice(0, length - 1)}…`;
+}
+
+export function estimateLabelLineCount(value: string, maxLineLength: number): number {
+  const words = value.split(/\s+/).filter(Boolean);
+  if (!words.length) return 1;
+  let current = words[0] ?? "";
+  let lines = 1;
+
+  for (let index = 1; index < words.length; index += 1) {
+    const next = words[index] ?? "";
+    if (`${current} ${next}`.length <= maxLineLength) {
+      current = `${current} ${next}`;
+      continue;
+    }
+    lines += 1;
+    current = next;
+    if (lines >= 2) break;
+  }
+
+  return Math.min(2, lines);
 }

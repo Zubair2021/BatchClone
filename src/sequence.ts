@@ -93,7 +93,10 @@ function normalizeFeature(feature: ParsedFeature, index: number): Feature {
 }
 
 export function sanitizeSequence(sequence: string): string {
-  return sequence.toUpperCase().replace(/[^A-Z]/g, "");
+  return sequence
+    .replace(/^>.*$/gm, "")
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "");
 }
 
 export function extractSelectedSequence(

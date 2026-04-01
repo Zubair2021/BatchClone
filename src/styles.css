@@ -86,6 +86,50 @@ code {
   max-width: 840px;
 }
 
+.hero-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.hero-logo {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #0f766e, #0ea5e9);
+  box-shadow: 0 16px 34px rgba(14, 116, 144, 0.22);
+}
+
+.hero-logo-ring {
+  position: absolute;
+  inset: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.88);
+  border-radius: 999px;
+}
+
+.hero-logo-core {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: white;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.hero-wordmark {
+  display: grid;
+  gap: 3px;
+}
+
+.hero-wordmark span {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   color: #0f766e;
@@ -209,6 +253,10 @@ code {
     max-width: none;
   }
 
+  .hero-brand {
+    align-items: flex-start;
+  }
+
   .hero-actions {
     width: 100%;
     min-width: 0;
@@ -323,7 +371,8 @@ code {
 }
 
 .pv-inline-control.compact,
-.pv-check.compact {
+.pv-check.compact,
+.pv-inline-range.compact {
   padding: 8px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.94);
@@ -540,7 +589,7 @@ code {
 }
 
 .pv-inline-range input {
-  width: 180px;
+  width: 132px;
 }
 
 .pv-legend-panel {

@@ -12,8 +12,9 @@ type PlasmidMapProps = {
   visibleIds: Set<string>;
   selectedIds: Set<string>;
   hoveredId: string | null;
-  labelMode: "all" | "smart" | "none";
   collapseMinorAnnotations: boolean;
+  labelFontSize: number;
+  labelSpacing: number;
   zoom: number;
   legendVisible: boolean;
   highlightedSpan?: { start: number; end: number } | null;
@@ -36,8 +37,9 @@ export default function PlasmidMap(props: PlasmidMapProps) {
     visibleIds,
     selectedIds,
     hoveredId,
-    labelMode,
     collapseMinorAnnotations,
+    labelFontSize,
+    labelSpacing,
     zoom,
     legendVisible,
     highlightedSpan,
@@ -92,14 +94,28 @@ export default function PlasmidMap(props: PlasmidMapProps) {
   const baseRadius = legendVisible ? 178 + zoom * 16 : 150 + zoom * 10;
   const labelRadius = legendVisible ? 292 + zoom * 40 : 338 + zoom * 56;
   const labels = displayFeatures.filter((derived) =>
-    shouldDisplayLabel({ derived, labelMode, collapseMinorAnnotations, selectedIds, hoveredId, plasmidLength }),
+    shouldDisplayLabel({ derived, collapseMinorAnnotations, selectedIds, hoveredId, plasmidLength }),
   );
+  const labelFeatures =
+    selectedIds.size > 0
+      ? labels.map((derived) => ({
+          ...derived,
+          state:
+            selectedIds.has(derived.feature.id) || hoveredId === derived.feature.id
+              ? derived.state
+              : "muted" as const,
+        }))
+      : labels.map((derived) => ({
+          ...derived,
+          state: hoveredId === derived.feature.id ? derived.state : "default" as const,
+        }));
   const labelLayouts = buildLabelLayouts({
-    features: labels,
+    features: labelFeatures,
     center: CENTER,
     outerRadius: baseRadius + 28,
     labelRadius,
-    minGap: legendVisible ? 30 : 38,
+    minGap: (legendVisible ? 18 : 24) * labelSpacing,
+    lineHeight: labelFontSize + 3,
   });
   const labelMap = new Map(labelLayouts.map((layout) => [layout.featureId, layout]));
   const selectedFeature = derivedFeatures.find((feature) => selectedIds.has(feature.feature.id));
@@ -137,7 +153,7 @@ export default function PlasmidMap(props: PlasmidMapProps) {
         />
       ))}
 
-      {labels.map((derived) => {
+      {labelFeatures.map((derived) => {
         const layout = labelMap.get(derived.feature.id);
         if (!layout) return null;
         return (
@@ -145,6 +161,8 @@ export default function PlasmidMap(props: PlasmidMapProps) {
             key={derived.feature.id}
             derived={derived}
             layout={layout}
+            fontSize={labelFontSize}
+            lineHeight={labelFontSize + 3}
             onMouseEnter={onFeatureEnter}
             onMouseMove={onFeatureMove}
             onMouseLeave={onFeatureLeave}

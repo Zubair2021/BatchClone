@@ -4,6 +4,8 @@ import { truncate, type DerivedFeature, type LabelLayout } from "./utils";
 type FeatureLabelProps = {
   derived: DerivedFeature;
   layout: LabelLayout;
+  fontSize: number;
+  lineHeight: number;
   onMouseEnter: (feature: Feature, event: React.MouseEvent<SVGGElement>) => void;
   onMouseMove: (feature: Feature, event: React.MouseEvent<SVGGElement>) => void;
   onMouseLeave: () => void;
@@ -11,7 +13,7 @@ type FeatureLabelProps = {
 };
 
 export default function FeatureLabel(props: FeatureLabelProps) {
-  const { derived, layout, onMouseEnter, onMouseMove, onMouseLeave, onClick } = props;
+  const { derived, layout, fontSize, lineHeight, onMouseEnter, onMouseMove, onMouseLeave, onClick } = props;
   const lines = wrapLabel(derived.feature.name, 18);
 
   return (
@@ -26,9 +28,15 @@ export default function FeatureLabel(props: FeatureLabelProps) {
         d={`M ${layout.anchorX} ${layout.anchorY} L ${layout.elbowX} ${layout.elbowY} L ${layout.labelX + (layout.side === "right" ? -8 : 8)} ${layout.labelY}`}
         className="pv-label-leader"
       />
-      <text x={layout.labelX} y={layout.labelY - 2} textAnchor={layout.textAnchor} className="pv-label-title">
+      <text
+        x={layout.labelX}
+        y={layout.labelY - 2}
+        textAnchor={layout.textAnchor}
+        className="pv-label-title"
+        style={{ fontSize: `${fontSize}px` }}
+      >
         {lines.map((line, index) => (
-          <tspan key={`${derived.feature.id}-${index}`} x={layout.labelX} dy={index === 0 ? 0 : 12}>
+          <tspan key={`${derived.feature.id}-${index}`} x={layout.labelX} dy={index === 0 ? 0 : lineHeight}>
             {index === lines.length - 1 ? truncate(line, 18) : line}
           </tspan>
         ))}

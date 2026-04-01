@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import PlasmidViewer from "./PlasmidViewer";
 import {
   buildAssembledPlasmid,
+  clampBase,
   designPrimersFromVectorJunctions,
   extractSelectedSequence,
   findFeature,
@@ -26,7 +27,7 @@ import type {
   SeamlessAssemblyPrimers,
 } from "./types";
 
-type InsertSourceMode = "plasmid" | "sequence";
+type SourceMode = "plasmid" | "sequence";
 type RuleMode = "feature" | "between";
 type BatchDetailSnapshot = {
   donorName: string;
@@ -98,20 +99,45 @@ function plasmidSignature(plasmid: Plasmid) {
   return `${plasmid.fileName}::${plasmid.name}::${plasmid.length}::${plasmid.sequence}`;
 }
 
+function createManualPlasmid(args: {
+  name: string;
+  sequence: string;
+  topology: Plasmid["topology"];
+}): Plasmid | null {
+  const sequence = sanitizeSequence(args.sequence);
+  if (!sequence.length) return null;
+  return {
+    id: "manual-sequence",
+    name: args.name.trim() || "Manual sequence",
+    fileName: "",
+    length: sequence.length,
+    sequence,
+    topology: args.topology,
+    strandedness: "ds",
+    features: [],
+  };
+}
+
 export default function App() {
   const insertSectionRef = useRef<HTMLElement | null>(null);
   const [plasmids, setPlasmids] = useState<Plasmid[]>([]);
   const [vectorLibraryIds, setVectorLibraryIds] = useState<string[]>([]);
   const [donorLibraryIds, setDonorLibraryIds] = useState<string[]>([]);
+  const [vectorMode, setVectorMode] = useState<SourceMode>("plasmid");
   const [vectorPlasmidId, setVectorPlasmidId] = useState("");
   const [insertPlasmidId, setInsertPlasmidId] = useState("");
+  const [manualVectorName, setManualVectorName] = useState("Custom vector");
+  const [manualVectorSequence, setManualVectorSequence] = useState("");
+  const [manualVectorTopology, setManualVectorTopology] = useState<Plasmid["topology"]>("circular");
+  const [manualVectorReplaceStart, setManualVectorReplaceStart] = useState("1");
+  const [manualVectorReplaceEnd, setManualVectorReplaceEnd] = useState("1");
   const [vectorVisibleIds, setVectorVisibleIds] = useState<string[]>([]);
   const [insertVisibleIds, setInsertVisibleIds] = useState<string[]>([]);
   const [vectorRuleMode, setVectorRuleMode] = useState<RuleMode>("between");
   const [insertRuleMode, setInsertRuleMode] = useState<RuleMode>("feature");
   const [vectorRule, setVectorRule] = useState<RegionRule | null>(null);
   const [insertRule, setInsertRule] = useState<RegionRule | null>(null);
-  const [insertMode, setInsertMode] = useState<InsertSourceMode>("plasmid");
+  const [insertMode, setInsertMode] = useState<SourceMode>("plasmid");
   const [manualInsertName, setManualInsertName] = useState("Custom insert");
   const [manualInsertSequence, setManualInsertSequence] = useState("");
   const [assemblyMethod, setAssemblyMethod] = useState<AssemblyMethod>("gibson");
@@ -137,15 +163,56 @@ export default function App() {
 
   const vectorSources = useMemo(() => plasmids.filter((plasmid) => vectorLibraryIds.includes(plasmid.id)), [plasmids, vectorLibraryIds]);
   const donorSources = useMemo(() => plasmids.filter((plasmid) => donorLibraryIds.includes(plasmid.id)), [plasmids, donorLibraryIds]);
-  const vectorPlasmid = plasmids.find((plasmid) => plasmid.id === vectorPlasmidId) ?? null;
+  const manualVectorPlasmid = useMemo(
+    () =>
+      createManualPlasmid({
+        name: manualVectorName,
+        sequence: manualVectorSequence,
+        topology: manualVectorTopology,
+      }),
+    [manualVectorName, manualVectorSequence, manualVectorTopology],
+  );
+  const vectorPlasmid =
+    vectorMode === "sequence"
+      ? manualVectorPlasmid
+      : plasmids.find((plasmid) => plasmid.id === vectorPlasmidId) ?? null;
   const insertPlasmid = plasmids.find((plasmid) => plasmid.id === insertPlasmidId) ?? null;
 
+  const manualVectorSpan = useMemo(() => {
+    if (!manualVectorPlasmid) return null;
+    const startValue = Number.parseInt(manualVectorReplaceStart, 10);
+    const endValue = Number.parseInt(manualVectorReplaceEnd, 10);
+    if (!Number.isFinite(startValue) || !Number.isFinite(endValue)) return null;
+    const start = clampBase(startValue - 1, manualVectorPlasmid.length);
+    const end = clampBase(endValue - 1, manualVectorPlasmid.length);
+    return {
+      start,
+      end,
+      names: ["Manual replacement window"],
+    };
+  }, [manualVectorPlasmid, manualVectorReplaceEnd, manualVectorReplaceStart]);
+
   const vectorSpan = useMemo(
-    () => (vectorPlasmid ? resolveRegionRule(vectorPlasmid, vectorRule) : null),
-    [vectorPlasmid, vectorRule],
+    () => {
+      if (!vectorPlasmid) return null;
+      if (vectorMode === "sequence") return manualVectorSpan;
+      return resolveRegionRule(vectorPlasmid, vectorRule);
+    },
+    [manualVectorSpan, vectorMode, vectorPlasmid, vectorRule],
   );
   const vectorBackbonePlan = useMemo(() => {
-    if (!vectorPlasmid || !vectorRule) return null;
+    if (!vectorPlasmid) return null;
+    if (vectorMode === "sequence") {
+      if (!manualVectorSpan) return null;
+      return {
+        replaceStart: manualVectorSpan.start,
+        replaceEnd: manualVectorSpan.end,
+        leftKeptEnd: (manualVectorSpan.start - 1 + vectorPlasmid.length) % vectorPlasmid.length,
+        rightKeptStart: (manualVectorSpan.end + 1) % vectorPlasmid.length,
+        names: manualVectorSpan.names,
+      };
+    }
+    if (!vectorRule) return null;
     if (vectorRule.mode === "between") {
       const left = vectorPlasmid.features.find((feature) => feature.id === vectorRule.leftFeatureId);
       const right = vectorPlasmid.features.find((feature) => feature.id === vectorRule.rightFeatureId);
@@ -168,7 +235,7 @@ export default function App() {
           names: vectorSpan.names,
         }
       : null;
-  }, [vectorPlasmid, vectorRule, vectorSpan]);
+  }, [manualVectorSpan, vectorMode, vectorPlasmid, vectorRule, vectorSpan]);
   const insertSpan = useMemo(
     () => (insertPlasmid ? resolveRegionRule(insertPlasmid, insertRule) : null),
     [insertPlasmid, insertRule],
@@ -205,6 +272,7 @@ export default function App() {
     },
     [vectorBackbonePlan, vectorPlasmid],
   );
+  const vectorPanelSequenceText = vectorSpan ? vectorSelectionSequence : vectorPlasmid?.sequence ?? "";
 
   const insertSequence = useMemo(() => {
     if (insertMode === "sequence") return sanitizeSequence(manualInsertSequence);
@@ -556,6 +624,7 @@ export default function App() {
 
     setPlasmids((current) => [...current, ...uniqueParsed]);
     if (library === "vector") {
+      setVectorMode("plasmid");
       setVectorLibraryIds((current) => [...current, ...uniqueParsed.map((plasmid) => plasmid.id)]);
       const firstVector = uniqueParsed[0] ?? null;
       if (firstVector) {
@@ -568,6 +637,7 @@ export default function App() {
         }
       }
     } else {
+      setInsertMode("plasmid");
       setDonorLibraryIds((current) => [...current, ...uniqueParsed.map((plasmid) => plasmid.id)]);
       const firstDonor = uniqueParsed[0] ?? null;
       if (firstDonor) {
@@ -742,7 +812,16 @@ export default function App() {
     <div className="app-shell">
       <header className="hero">
         <div className="hero-content">
-          <p className="eyebrow">BatchClone</p>
+          <div className="hero-brand">
+            <div className="hero-logo" aria-hidden="true">
+              <span className="hero-logo-ring" />
+              <span className="hero-logo-core">BC</span>
+            </div>
+            <div className="hero-wordmark">
+              <p className="eyebrow">BatchClone</p>
+              <span>Primer design for repeatable assembly workflows</span>
+            </div>
+          </div>
           <h1>Design Primers for Batch Cloning</h1>
           <p className="hero-copy">
             Build assembly-ready primer sets from annotated vectors and donor constructs with a workflow tuned
@@ -786,6 +865,8 @@ export default function App() {
         <RulePanel
           title="1. Vector Rule"
           plasmid={vectorPlasmid}
+          sourceMode={vectorMode}
+          setSourceMode={setVectorMode}
           ruleMode={vectorRuleMode}
           setRuleMode={setVectorRuleMode}
           rule={vectorRule}
@@ -810,7 +891,17 @@ export default function App() {
                 }
               : null
           }
-          sequenceText={vectorSelectionSequence}
+          sequenceText={vectorPanelSequenceText}
+          manualSequenceName={manualVectorName}
+          setManualSequenceName={setManualVectorName}
+          manualSequenceText={manualVectorSequence}
+          setManualSequenceText={setManualVectorSequence}
+          manualTopology={manualVectorTopology}
+          setManualTopology={setManualVectorTopology}
+          manualRegionStart={manualVectorReplaceStart}
+          setManualRegionStart={setManualVectorReplaceStart}
+          manualRegionEnd={manualVectorReplaceEnd}
+          setManualRegionEnd={setManualVectorReplaceEnd}
           footerAction={
             <button
               type="button"
@@ -843,12 +934,12 @@ export default function App() {
           onUpdatePlasmidMeta={updatePlasmidMeta}
           highlightedSpan={insertSpan}
           sequenceText={insertMode === "plasmid" ? insertSequence : sanitizeSequence(manualInsertSequence)}
-          insertMode={insertMode}
-          setInsertMode={setInsertMode}
-          manualInsertName={manualInsertName}
-          setManualInsertName={setManualInsertName}
-          manualInsertSequence={manualInsertSequence}
-          setManualInsertSequence={setManualInsertSequence}
+          sourceMode={insertMode}
+          setSourceMode={setInsertMode}
+          manualSequenceName={manualInsertName}
+          setManualSequenceName={setManualInsertName}
+          manualSequenceText={manualInsertSequence}
+          setManualSequenceText={setManualInsertSequence}
           autoAdjustBoundarySelection
           donorBrowser={
             <div className="donor-browser">
@@ -1019,12 +1110,18 @@ function RulePanel(props: {
   sequenceText: string;
   footerAction?: React.ReactNode;
   donorBrowser?: React.ReactNode;
-  insertMode?: InsertSourceMode;
-  setInsertMode?: (mode: InsertSourceMode) => void;
-  manualInsertName?: string;
-  setManualInsertName?: (value: string) => void;
-  manualInsertSequence?: string;
-  setManualInsertSequence?: (value: string) => void;
+  sourceMode?: SourceMode;
+  setSourceMode?: (mode: SourceMode) => void;
+  manualSequenceName?: string;
+  setManualSequenceName?: (value: string) => void;
+  manualSequenceText?: string;
+  setManualSequenceText?: (value: string) => void;
+  manualTopology?: Plasmid["topology"];
+  setManualTopology?: (value: Plasmid["topology"]) => void;
+  manualRegionStart?: string;
+  setManualRegionStart?: (value: string) => void;
+  manualRegionEnd?: string;
+  setManualRegionEnd?: (value: string) => void;
   autoAdjustBoundarySelection?: boolean;
 }) {
   const {
@@ -1044,12 +1141,18 @@ function RulePanel(props: {
     sequenceText,
     footerAction,
     donorBrowser,
-    insertMode,
-    setInsertMode,
-    manualInsertName,
-    setManualInsertName,
-    manualInsertSequence,
-    setManualInsertSequence,
+    sourceMode,
+    setSourceMode,
+    manualSequenceName,
+    setManualSequenceName,
+    manualSequenceText,
+    setManualSequenceText,
+    manualTopology,
+    setManualTopology,
+    manualRegionStart,
+    setManualRegionStart,
+    manualRegionEnd,
+    setManualRegionEnd,
     autoAdjustBoundarySelection = false,
   } = props;
 
@@ -1143,14 +1246,18 @@ function RulePanel(props: {
         <span>{highlightedSpan ? `${highlightedSpan.start + 1}-${highlightedSpan.end + 1}` : "No region selected"}</span>
       </div>
 
-      {setInsertMode ? (
+      {setSourceMode ? (
         <div className="toggle-row">
-          <button type="button" className={insertMode === "plasmid" ? "toggle-button active" : "toggle-button"} onClick={() => setInsertMode("plasmid")}>From donor</button>
-          <button type="button" className={insertMode === "sequence" ? "toggle-button active" : "toggle-button"} onClick={() => setInsertMode("sequence")}>Paste sequence</button>
+          <button type="button" className={sourceMode === "plasmid" ? "toggle-button active" : "toggle-button"} onClick={() => setSourceMode("plasmid")}>
+            {title.startsWith("1.") ? "From file" : "From donor"}
+          </button>
+          <button type="button" className={sourceMode === "sequence" ? "toggle-button active" : "toggle-button"} onClick={() => setSourceMode("sequence")}>
+            Paste sequence
+          </button>
         </div>
       ) : null}
 
-      {!setInsertMode || insertMode === "plasmid" ? (
+      {!setSourceMode || sourceMode === "plasmid" ? (
         <>
           {donorBrowser}
           <div className="meta-grid">
@@ -1264,13 +1371,38 @@ function RulePanel(props: {
       ) : (
         <div className="sequence-editor">
           <label className="stacked-field">
-            Insert name
-            <input value={manualInsertName ?? ""} onChange={(event) => setManualInsertName?.(event.target.value)} />
+            {title.startsWith("1.") ? "Vector name" : "Insert name"}
+            <input value={manualSequenceName ?? ""} onChange={(event) => setManualSequenceName?.(event.target.value)} />
           </label>
           <label className="stacked-field">
-            Insert sequence
-            <textarea value={manualInsertSequence ?? ""} onChange={(event) => setManualInsertSequence?.(event.target.value)} placeholder="Paste ssDNA or dsDNA insert sequence" />
+            {title.startsWith("1.") ? "Vector sequence" : "Insert sequence"}
+            <textarea
+              value={manualSequenceText ?? ""}
+              onChange={(event) => setManualSequenceText?.(event.target.value)}
+              placeholder={title.startsWith("1.") ? "Paste vector sequence or FASTA" : "Paste insert sequence or FASTA"}
+            />
           </label>
+          {title.startsWith("1.") ? (
+            <>
+              <label className="stacked-field">
+                Topology
+                <select value={manualTopology ?? "circular"} onChange={(event) => setManualTopology?.(event.target.value as Plasmid["topology"])}>
+                  <option value="circular">Circular</option>
+                  <option value="linear">Linear</option>
+                </select>
+              </label>
+              <div className="meta-grid">
+                <label className="stacked-field">
+                  Replacement start
+                  <input value={manualRegionStart ?? ""} onChange={(event) => setManualRegionStart?.(event.target.value)} placeholder="1-based" />
+                </label>
+                <label className="stacked-field">
+                  Replacement end
+                  <input value={manualRegionEnd ?? ""} onChange={(event) => setManualRegionEnd?.(event.target.value)} placeholder="1-based" />
+                </label>
+              </div>
+            </>
+          ) : null}
         </div>
       )}
 
