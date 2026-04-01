@@ -61,6 +61,9 @@ export async function parsePlasmidFile(file: File): Promise<Plasmid> {
   const features = (raw?.features ?? [])
     .map((feature, index) => normalizeFeature(feature, index, sequence.length))
     .filter((feature): feature is Feature => feature !== null);
+  const isSingleStrandedImport = isSingleStrandedSequenceFile(file.name, rawText, features.length);
+  const topology = raw?.circular === false || isSingleStrandedImport ? "linear" : "circular";
+  const strandedness = isSingleStrandedImport ? "ss" : "ds";
 
   return {
     id: crypto.randomUUID(),
@@ -68,11 +71,18 @@ export async function parsePlasmidFile(file: File): Promise<Plasmid> {
     fileName: file.name,
     length: sequence.length,
     sequence,
-    topology: raw?.circular === false ? "linear" : "circular",
-    strandedness: "ds",
+    topology,
+    strandedness,
     description: raw?.description,
     features,
   };
+}
+
+function isSingleStrandedSequenceFile(fileName: string, rawText: string, featureCount: number): boolean {
+  const lowerName = fileName.toLowerCase();
+  const extensionHint = /\.(fa|fasta|fas|fna|ffn|seq|txt)$/i.test(lowerName);
+  const hasFastaHeader = /^\s*>/m.test(rawText);
+  return featureCount === 0 && (extensionHint || hasFastaHeader);
 }
 
 type ParsedFeature = {
@@ -614,8 +624,9 @@ export function buildAssembledPlasmid(args: {
   insertName: string;
   insertSource?: Plasmid | null;
   insertSpan?: { start: number; end: number; names: string[] } | null;
+  primers?: SeamlessAssemblyPrimers | null;
 }): Plasmid {
-  const { vector, replaceSpan, insertSequence, insertName, insertSource, insertSpan } = args;
+  const { vector, replaceSpan, insertSequence, insertName, insertSource, insertSpan, primers } = args;
   const before = vector.sequence.slice(0, replaceSpan.start);
   const after = vector.sequence.slice(replaceSpan.end + 1);
   const assembledSequence =
@@ -664,6 +675,14 @@ export function buildAssembledPlasmid(args: {
           }))
       : [];
 
+  const primerFeatures = primers
+    ? buildPrimerBindingFeatures({
+        sequence: assembledSequence,
+        topology: vector.topology,
+        primers,
+      })
+    : [];
+
   return {
     id: crypto.randomUUID(),
     name: `${vector.name} assembled`,
@@ -673,8 +692,73 @@ export function buildAssembledPlasmid(args: {
     topology: vector.topology,
     strandedness: "ds",
     description: `Assembled from ${vector.name} with ${insertName}`,
-    features: [insertFeature, ...insertChildFeatures, ...keptFeatures],
+    features: [insertFeature, ...insertChildFeatures, ...primerFeatures, ...keptFeatures],
   };
+}
+
+function buildPrimerBindingFeatures(args: {
+  sequence: string;
+  topology: Plasmid["topology"];
+  primers: SeamlessAssemblyPrimers;
+}): Feature[] {
+  const { sequence, topology, primers } = args;
+  const bindings = [
+    {
+      name: "Backbone_F",
+      anneal: primers.vectorForwardAnneal,
+      strand: 1 as const,
+      color: "#475569",
+    },
+    {
+      name: "Backbone_R",
+      anneal: reverseComplement(primers.vectorReverseAnneal),
+      strand: -1 as const,
+      color: "#475569",
+    },
+    {
+      name: "Insert_F",
+      anneal: primers.insertForwardAnneal,
+      strand: 1 as const,
+      color: "#0f766e",
+    },
+    {
+      name: "Insert_R",
+      anneal: reverseComplement(primers.insertReverseAnneal),
+      strand: -1 as const,
+      color: "#0f766e",
+    },
+  ];
+
+  return bindings.flatMap((binding) => {
+    const match = findBindingSite(sequence, binding.anneal, topology);
+    if (!match) return [];
+    return [
+      {
+        id: crypto.randomUUID(),
+        name: `${binding.name} @${match.start + 1}-${match.end + 1}`,
+        type: "primer_bind",
+        start: match.start,
+        end: match.end,
+        strand: binding.strand,
+        color: binding.color,
+      },
+    ];
+  });
+}
+
+function findBindingSite(
+  sequence: string,
+  annealSequence: string,
+  topology: Plasmid["topology"],
+): { start: number; end: number } | null {
+  if (!sequence.length || !annealSequence.length) return null;
+  const haystack = topology === "circular" ? sequence + sequence : sequence;
+  const index = haystack.indexOf(annealSequence);
+  if (index === -1) return null;
+  const start = index % sequence.length;
+  const end = (start + annealSequence.length - 1) % sequence.length;
+  if (topology === "linear" && start + annealSequence.length > sequence.length) return null;
+  return { start, end };
 }
 
 export function designSeamlessReplacementPrimers(args: {

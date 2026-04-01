@@ -107,7 +107,8 @@ function plasmidSignature(plasmid: Plasmid) {
 function createManualPlasmid(args: {
   name: string;
   sequence: string;
-  topology: Plasmid["topology"];
+  topology?: Plasmid["topology"];
+  strandedness?: Plasmid["strandedness"];
 }): Plasmid | null {
   const sequence = sanitizeSequence(args.sequence);
   if (!sequence.length) return null;
@@ -117,8 +118,8 @@ function createManualPlasmid(args: {
     fileName: "",
     length: sequence.length,
     sequence,
-    topology: args.topology,
-    strandedness: "ds",
+    topology: args.topology ?? "linear",
+    strandedness: args.strandedness ?? "ss",
     features: [],
   };
 }
@@ -132,7 +133,8 @@ export default function App() {
   const [insertPlasmidId, setInsertPlasmidId] = useState("");
   const [manualVectorName, setManualVectorName] = useState("Custom vector");
   const [manualVectorSequence, setManualVectorSequence] = useState("");
-  const [manualVectorTopology, setManualVectorTopology] = useState<Plasmid["topology"]>("circular");
+  const [manualVectorTopology, setManualVectorTopology] = useState<Plasmid["topology"]>("linear");
+  const [manualVectorStrandedness, setManualVectorStrandedness] = useState<Plasmid["strandedness"]>("ss");
   const [manualVectorReplaceStart, setManualVectorReplaceStart] = useState("1");
   const [manualVectorReplaceEnd, setManualVectorReplaceEnd] = useState("1");
   const [vectorVisibleIds, setVectorVisibleIds] = useState<string[]>([]);
@@ -144,6 +146,7 @@ export default function App() {
   const [insertMode, setInsertMode] = useState<SourceMode>("plasmid");
   const [manualInsertName, setManualInsertName] = useState("Custom insert");
   const [manualInsertSequence, setManualInsertSequence] = useState("");
+  const [manualInsertStrandedness, setManualInsertStrandedness] = useState<Plasmid["strandedness"]>("ss");
   const [assemblyMethod, setAssemblyMethod] = useState<AssemblyMethod>("gibson");
   const [batchFeatureQuery, setBatchFeatureQuery] = useState("");
   const [batchLeftQuery, setBatchLeftQuery] = useState("T7");
@@ -174,8 +177,9 @@ export default function App() {
         name: manualVectorName,
         sequence: manualVectorSequence,
         topology: manualVectorTopology,
+        strandedness: manualVectorStrandedness,
       }),
-    [manualVectorName, manualVectorSequence, manualVectorTopology],
+    [manualVectorName, manualVectorSequence, manualVectorStrandedness, manualVectorTopology],
   );
   const vectorPlasmid =
     vectorMode === "sequence"
@@ -314,8 +318,9 @@ export default function App() {
       insertName: insertLabel,
       insertSource: insertMode === "plasmid" ? insertPlasmid : null,
       insertSpan: insertMode === "plasmid" ? insertSpan : null,
+      primers,
     });
-  }, [insertLabel, insertMode, insertPlasmid, insertSequence, insertSpan, vectorBackbonePlan, vectorPlasmid]);
+  }, [insertLabel, insertMode, insertPlasmid, insertSequence, insertSpan, primers, vectorBackbonePlan, vectorPlasmid]);
 
   const validation = useMemo(() => {
     if (!vectorPlasmid || !vectorBackbonePlan || !insertSequence || !primers) return null;
@@ -453,6 +458,7 @@ export default function App() {
             insertName: match.name,
             insertSource: donor,
             insertSpan: { start: match.start, end: match.end, names: [match.name] },
+            primers: designed,
           });
           return {
             donorId: donor.id,
@@ -542,6 +548,7 @@ export default function App() {
           insertName: `${left.name} -> ${right.name}`,
           insertSource: donor,
           insertSpan: span,
+          primers: designed,
         });
         return {
           donorId: donor.id,
@@ -932,6 +939,8 @@ export default function App() {
           setManualSequenceText={setManualVectorSequence}
           manualTopology={manualVectorTopology}
           setManualTopology={setManualVectorTopology}
+          manualStrandedness={manualVectorStrandedness}
+          setManualStrandedness={setManualVectorStrandedness}
           manualRegionStart={manualVectorReplaceStart}
           setManualRegionStart={setManualVectorReplaceStart}
           manualRegionEnd={manualVectorReplaceEnd}
@@ -965,6 +974,8 @@ export default function App() {
           setManualSequenceName={setManualInsertName}
           manualSequenceText={manualInsertSequence}
           setManualSequenceText={setManualInsertSequence}
+          manualStrandedness={manualInsertStrandedness}
+          setManualStrandedness={setManualInsertStrandedness}
           autoAdjustBoundarySelection
           donorBrowser={
             <div className="donor-browser">
@@ -1020,7 +1031,7 @@ export default function App() {
 
             <PlasmidViewer
               plasmid={assembledPlasmid}
-              selectedFeatureIds={assembledPlasmid.features.filter((feature) => feature.type === "insert").map((feature) => feature.id)}
+              selectedFeatureIds={assembledPlasmid.features.filter((feature) => feature.type === "insert" || feature.type === "primer_bind").map((feature) => feature.id)}
               visibleFeatureIds={assembledPlasmid.features.map((feature) => feature.id)}
               highlightedSpan={assembledPlasmid.features.find((feature) => feature.type === "insert") ?? null}
               sequenceText={assembledPlasmid.sequence}
@@ -1165,6 +1176,8 @@ function RulePanel(props: {
   setManualSequenceText?: (value: string) => void;
   manualTopology?: Plasmid["topology"];
   setManualTopology?: (value: Plasmid["topology"]) => void;
+  manualStrandedness?: Plasmid["strandedness"];
+  setManualStrandedness?: (value: Plasmid["strandedness"]) => void;
   manualRegionStart?: string;
   setManualRegionStart?: (value: string) => void;
   manualRegionEnd?: string;
@@ -1196,6 +1209,8 @@ function RulePanel(props: {
     setManualSequenceText,
     manualTopology,
     setManualTopology,
+    manualStrandedness,
+    setManualStrandedness,
     manualRegionStart,
     setManualRegionStart,
     manualRegionEnd,
@@ -1315,20 +1330,22 @@ function RulePanel(props: {
                 {plasmidOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
               </select>
             </label>
-            <label className="stacked-field">
-              Topology
-              <select value={plasmid?.topology ?? "circular"} disabled={!plasmid} onChange={(event) => plasmid && onUpdatePlasmidMeta(plasmid.id, { topology: event.target.value as Plasmid["topology"] })}>
-                <option value="circular">Circular</option>
-                <option value="linear">Linear</option>
-              </select>
-            </label>
-            <label className="stacked-field">
-              Strand
-              <select value={plasmid?.strandedness ?? "ds"} disabled={!plasmid} onChange={(event) => plasmid && onUpdatePlasmidMeta(plasmid.id, { strandedness: event.target.value as Plasmid["strandedness"] })}>
-                <option value="ds">Double stranded</option>
-                <option value="ss">Single stranded</option>
-              </select>
-            </label>
+            {plasmid?.topology === "linear" ? (
+              <label className="stacked-field">
+                Linear import
+                <button type="button" className="secondary-button" onClick={() => onUpdatePlasmidMeta(plasmid.id, { topology: "circular" })}>
+                  Convert to circular
+                </button>
+              </label>
+            ) : null}
+            {plasmid?.strandedness === "ss" ? (
+              <label className="stacked-field">
+                Single-stranded import
+                <button type="button" className="secondary-button" onClick={() => onUpdatePlasmidMeta(plasmid.id, { strandedness: "ds" })}>
+                  Convert to dsDNA
+                </button>
+              </label>
+            ) : null}
           </div>
 
           <div className="rule-grid">
@@ -1429,15 +1446,29 @@ function RulePanel(props: {
               placeholder={title.startsWith("1.") ? "Paste vector sequence or FASTA" : "Paste insert sequence or FASTA"}
             />
           </label>
+          <div className="meta-grid">
+            {manualStrandedness === "ss" ? (
+              <label className="stacked-field">
+                Single-stranded input
+                <button type="button" className="secondary-button" onClick={() => setManualStrandedness?.("ds")}>
+                  Convert to dsDNA
+                </button>
+              </label>
+            ) : null}
+            {title.startsWith("1.") && manualTopology === "linear" ? (
+              <label className="stacked-field">
+                Linear input
+                <button type="button" className="secondary-button" onClick={() => setManualTopology?.("circular")}>
+                  Convert to circular
+                </button>
+              </label>
+            ) : null}
+          </div>
           {title.startsWith("1.") ? (
             <>
-              <label className="stacked-field">
-                Topology
-                <select value={manualTopology ?? "circular"} onChange={(event) => setManualTopology?.(event.target.value as Plasmid["topology"])}>
-                  <option value="circular">Circular</option>
-                  <option value="linear">Linear</option>
-                </select>
-              </label>
+              <div className="selection-summary">
+                <strong>Pasted sequence defaults:</strong> linear ssDNA. Promote it only if you want cloning assumptions applied.
+              </div>
               <div className="meta-grid">
                 <label className="stacked-field">
                   Replacement start
@@ -1787,7 +1818,7 @@ function BatchAssemblyModal(props: {
 
         <PlasmidViewer
           plasmid={detail.assembledPlasmid}
-          selectedFeatureIds={detail.assembledPlasmid.features.filter((feature) => feature.type === "insert").map((feature) => feature.id)}
+          selectedFeatureIds={detail.assembledPlasmid.features.filter((feature) => feature.type === "insert" || feature.type === "primer_bind").map((feature) => feature.id)}
           visibleFeatureIds={detail.assembledPlasmid.features.map((feature) => feature.id)}
           highlightedSpan={detail.assembledPlasmid.features.find((feature) => feature.type === "insert") ?? null}
           sequenceText={detail.assembledPlasmid.sequence}
