@@ -830,11 +830,15 @@ export default function App() {
               <span>Primer design for repeatable assembly workflows</span>
             </div>
           </div>
-          <h1>Design Primers for Batch Cloning</h1>
+          <div className="hero-kicker-row">
+            <span className="hero-kicker-pill">Modern cloning workspace</span>
+            <span className="hero-kicker-copy">Vector-first, annotation-aware, batch-ready</span>
+          </div>
+          <h1>Batch cloning, minus the primer-design drag.</h1>
           <p className="hero-copy">
-            Build assembly-ready primer sets from annotated vectors and donor constructs with a workflow tuned
-            for repeated cloning jobs. Define junction rules once, inspect the map visually, and export batch
-            results with matched features, diagnostics, and assembled plasmid previews.
+            Define the backbone once, review donor inserts at scale, and inspect assembled constructs without
+            losing annotation context. The first screen is optimized around the one thing that matters most:
+            getting to a trustworthy primer set fast.
           </p>
           <div className="hero-metrics" aria-label="Project summary">
             <div className="hero-metric">
@@ -850,23 +854,55 @@ export default function App() {
               <strong>Gibson + In-Fusion</strong>
             </div>
           </div>
-        </div>
-        <div className="hero-actions">
-          <div className="upload-stack">
-            <label className="upload-button">
-              <input type="file" accept=".gb,.gbk,.dna,.fa,.fasta,.fas,.seq" multiple onChange={(event) => void handleFiles(event, "vector")} disabled={loading} />
-              {loading ? "Loading..." : "Load vector files"}
-            </label>
-            <label className="upload-button donor-upload">
-              <input type="file" accept=".gb,.gbk,.dna,.fa,.fasta,.fas,.seq" multiple onChange={(event) => void handleFiles(event, "donor")} disabled={loading} />
-              {loading ? "Loading..." : "Load donor files"}
-            </label>
-            <button type="button" className="secondary-button" onClick={() => void handleLoadExampleSet()} disabled={loading}>
-              {loading ? "Loading..." : "Load example set"}
-            </button>
+          <div className="hero-steps" aria-label="Workflow overview">
+            <article className="hero-step-card">
+              <span className="hero-step-index">01</span>
+              <strong>Define vector window</strong>
+              <p>Use the map and feature boundaries to isolate the exact backbone you want to keep.</p>
+            </article>
+            <article className="hero-step-card">
+              <span className="hero-step-index">02</span>
+              <strong>Load donor inserts</strong>
+              <p>Reuse common landmarks across donor plasmids for fast batch extraction and review.</p>
+            </article>
+            <article className="hero-step-card">
+              <span className="hero-step-index">03</span>
+              <strong>Validate the assembly</strong>
+              <p>Check diagnostics, assembled maps, and primer binding sites before you export.</p>
+            </article>
           </div>
-          <div className="status">{status}</div>
         </div>
+        <aside className="hero-actions">
+          <div className="hero-actions-card">
+            <div className="hero-actions-copy">
+              <p className="eyebrow">Primary action</p>
+              <h2>Start a primer-design run</h2>
+              <span>Bring in a backbone, then donor plasmids, or use the synthetic demo set.</span>
+            </div>
+            <div className="upload-stack">
+              <label className="upload-button">
+                <input type="file" accept=".gb,.gbk,.dna,.fa,.fasta,.fas,.seq" multiple onChange={(event) => void handleFiles(event, "vector")} disabled={loading} />
+                {loading ? "Loading..." : "Load vector backbone"}
+              </label>
+              <label className="upload-button donor-upload">
+                <input type="file" accept=".gb,.gbk,.dna,.fa,.fasta,.fas,.seq" multiple onChange={(event) => void handleFiles(event, "donor")} disabled={loading} />
+                {loading ? "Loading..." : "Load donor plasmids"}
+              </label>
+              <button type="button" className="secondary-button" onClick={() => void handleLoadExampleSet()} disabled={loading}>
+                {loading ? "Loading..." : "Explore demo set"}
+              </button>
+            </div>
+            <div className="status">{status}</div>
+            <div className="hero-actions-footnote">
+              <span>Supports GenBank, SnapGene, FASTA, and pasted sequence.</span>
+              <strong>Desktop-first with mobile-friendly review flows.</strong>
+            </div>
+          </div>
+          <div className="hero-side-note">
+            <span>Reference bar</span>
+            <strong>Designed against Stripe, Linear, and Vercel-style hierarchy.</strong>
+          </div>
+        </aside>
       </header>
 
       <main className="workflow-stack">
