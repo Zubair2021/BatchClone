@@ -100,15 +100,26 @@ function normalizeFeature(feature: ParsedFeature, index: number, sequenceLength:
 
   const start = normalizeCoordinate(feature.start ?? 0, sequenceLength);
   const end = normalizeCoordinate(feature.end ?? 0, sequenceLength);
+  const type = feature.type?.trim() || "misc_feature";
+  const span = normalizedFeatureLength(start, end, sequenceLength);
+  if (type.toLowerCase() === "source" && span >= sequenceLength - 1) {
+    return null;
+  }
+
   return {
     id: crypto.randomUUID(),
     name: feature.name?.trim() || `Feature ${index + 1}`,
-    type: feature.type?.trim() || "misc_feature",
+    type,
     start,
     end,
     strand: feature.strand,
     color: FEATURE_COLORS[index % FEATURE_COLORS.length],
   };
+}
+
+function normalizedFeatureLength(start: number, end: number, sequenceLength: number): number {
+  if (start <= end) return end - start + 1;
+  return sequenceLength - start + end + 1;
 }
 
 function normalizeCoordinate(value: number, sequenceLength: number): number {
