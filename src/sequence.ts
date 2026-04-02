@@ -638,52 +638,49 @@ export function buildAssembledPlasmid(args: {
   primers?: SeamlessAssemblyPrimers | null;
 }): Plasmid {
   const { vector, replaceSpan, insertSequence, insertName, insertSource, insertSpan, primers } = args;
+  const isSimpleReplacement = vector.topology === "linear" || replaceSpan.start <= replaceSpan.end;
   const before = vector.sequence.slice(0, replaceSpan.start);
   const after = vector.sequence.slice(replaceSpan.end + 1);
   const assembledSequence =
-    vector.topology === "linear" || replaceSpan.start <= replaceSpan.end
+    isSimpleReplacement
       ? `${before}${insertSequence}${after}`
       : `${insertSequence}${vector.sequence.slice(replaceSpan.end + 1, replaceSpan.start)}`;
 
   const removedSize = replacedLength(vector, replaceSpan);
   const shift = insertSequence.length - removedSize;
-
-  const keptFeatures =
-    vector.topology === "linear" || replaceSpan.start <= replaceSpan.end
-      ? vector.features
-          .filter((feature) => feature.end < replaceSpan.start || feature.start > replaceSpan.end)
-          .map((feature) => ({
-            ...feature,
-            start: feature.start > replaceSpan.end ? feature.start + shift : feature.start,
-            end: feature.end > replaceSpan.end ? feature.end + shift : feature.end,
-          }))
-      : [];
+  const insertStart = isSimpleReplacement ? replaceSpan.start : 0;
 
   const insertFeature: Feature = {
     id: crypto.randomUUID(),
     name: insertName,
     type: "insert",
-    start: vector.topology === "linear" || replaceSpan.start <= replaceSpan.end ? replaceSpan.start : 0,
-    end:
-      (vector.topology === "linear" || replaceSpan.start <= replaceSpan.end ? replaceSpan.start : 0) +
-      Math.max(0, insertSequence.length - 1),
+    start: insertStart,
+    end: insertStart + Math.max(0, insertSequence.length - 1),
     color: "#f97316",
   };
 
+  const vectorFeatures = vector.features.flatMap((feature) =>
+    remapFeature(
+      feature,
+      vector.length,
+      assembledSequence.length,
+      vector.topology,
+      (position) => mapVectorPositionToAssembled(position, vector, replaceSpan, insertSequence.length, shift),
+    ),
+  );
+
   const insertChildFeatures =
     insertSource && insertSpan
-      ? insertSource.features
-          .filter((feature) => feature.start >= insertSpan.start && feature.end <= insertSpan.end)
-          .map((feature) => ({
-            ...feature,
-            id: crypto.randomUUID(),
-            start:
-              (vector.topology === "linear" || replaceSpan.start <= replaceSpan.end ? replaceSpan.start : 0) +
-              (feature.start - insertSpan.start),
-            end:
-              (vector.topology === "linear" || replaceSpan.start <= replaceSpan.end ? replaceSpan.start : 0) +
-              (feature.end - insertSpan.start),
-          }))
+      ? insertSource.features.flatMap((feature) =>
+          remapFeature(
+            feature,
+            insertSource.length,
+            assembledSequence.length,
+            vector.topology,
+            (position) =>
+              mapInsertPositionToAssembled(position, insertSource, insertSpan, insertStart),
+          ),
+        )
       : [];
 
   const primerFeatures = primers
@@ -703,8 +700,128 @@ export function buildAssembledPlasmid(args: {
     topology: vector.topology,
     strandedness: "ds",
     description: `Assembled from ${vector.name} with ${insertName}`,
-    features: [insertFeature, ...insertChildFeatures, ...primerFeatures, ...keptFeatures],
+    features: dedupeFeatures([insertFeature, ...insertChildFeatures, ...primerFeatures, ...vectorFeatures]),
   };
+}
+
+function mapVectorPositionToAssembled(
+  position: number,
+  vector: Plasmid,
+  replaceSpan: { start: number; end: number },
+  insertLength: number,
+  shift: number,
+): number | null {
+  const isSimpleReplacement = vector.topology === "linear" || replaceSpan.start <= replaceSpan.end;
+  if (isSimpleReplacement) {
+    if (position < replaceSpan.start) return position;
+    if (position > replaceSpan.end) return position + shift;
+    return null;
+  }
+
+  const retainedStart = (replaceSpan.end + 1) % vector.length;
+  const retainedEnd = (replaceSpan.start - 1 + vector.length) % vector.length;
+  if (!positionInSpan(position, retainedStart, retainedEnd, vector.length)) return null;
+  return insertLength + circularOffset(retainedStart, position, vector.length);
+}
+
+function mapInsertPositionToAssembled(
+  position: number,
+  insertSource: Plasmid,
+  insertSpan: { start: number; end: number },
+  assembledInsertStart: number,
+): number | null {
+  if (!positionInSpan(position, insertSpan.start, insertSpan.end, insertSource.length)) return null;
+  return assembledInsertStart + circularOffset(insertSpan.start, position, insertSource.length);
+}
+
+function remapFeature(
+  feature: Feature,
+  sourceLength: number,
+  assembledLength: number,
+  assembledTopology: Plasmid["topology"],
+  mapper: (position: number) => number | null,
+): Feature[] {
+  const mappedPositions: number[] = [];
+  for (const position of iterateSpan(feature.start, feature.end, sourceLength)) {
+    const mapped = mapper(position);
+    if (mapped !== null) mappedPositions.push(mapped);
+  }
+
+  if (!mappedPositions.length) return [];
+
+  const ranges = collapseMappedPositions(mappedPositions, assembledLength, assembledTopology);
+  return ranges.map((range, index) => ({
+    ...feature,
+    id: crypto.randomUUID(),
+    name: ranges.length > 1 ? `${feature.name} (${index + 1})` : feature.name,
+    start: range.start,
+    end: range.end,
+  }));
+}
+
+function iterateSpan(start: number, end: number, sequenceLength: number): number[] {
+  const positions: number[] = [];
+  if (start <= end) {
+    for (let position = start; position <= end; position += 1) positions.push(position);
+    return positions;
+  }
+  for (let position = start; position < sequenceLength; position += 1) positions.push(position);
+  for (let position = 0; position <= end; position += 1) positions.push(position);
+  return positions;
+}
+
+function collapseMappedPositions(
+  positions: number[],
+  sequenceLength: number,
+  topology: Plasmid["topology"],
+): Array<{ start: number; end: number }> {
+  if (!positions.length) return [];
+  const ranges: Array<{ start: number; end: number }> = [];
+  let rangeStart = positions[0];
+  let previous = positions[0];
+
+  for (let index = 1; index < positions.length; index += 1) {
+    const current = positions[index];
+    const contiguous =
+      current === previous + 1 ||
+      (topology === "circular" && previous === sequenceLength - 1 && current === 0);
+    if (!contiguous) {
+      ranges.push({ start: rangeStart, end: previous });
+      rangeStart = current;
+    }
+    previous = current;
+  }
+
+  ranges.push({ start: rangeStart, end: previous });
+
+  if (topology === "circular" && ranges.length > 1) {
+    const first = ranges[0];
+    const last = ranges[ranges.length - 1];
+    if (first.start === 0 && last.end === sequenceLength - 1) {
+      return [{ start: last.start, end: first.end }, ...ranges.slice(1, -1)];
+    }
+  }
+
+  return ranges;
+}
+
+function positionInSpan(position: number, start: number, end: number, sequenceLength: number): boolean {
+  if (start <= end) return position >= start && position <= end;
+  return position >= start || position <= end;
+}
+
+function circularOffset(start: number, position: number, sequenceLength: number): number {
+  return (position - start + sequenceLength) % sequenceLength;
+}
+
+function dedupeFeatures(features: Feature[]): Feature[] {
+  const seen = new Set<string>();
+  return features.filter((feature) => {
+    const key = [feature.name, feature.type, feature.start, feature.end, feature.strand ?? 0].join(":");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function buildPrimerBindingFeatures(args: {
